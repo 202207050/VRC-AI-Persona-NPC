@@ -1,0 +1,4 @@
+# everything else: normal text handling
+* text=auto
+# Windows batch files must keep CRLF line endings, even in ZIP downloads
+*.cmd -text

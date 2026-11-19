@@ -1,0 +1,5 @@
+# PyTorch is installed separately by setup.cmd (GPU or CPU build).
+openai-whisper==20250625
+sounddevice==0.5.6
+anthropic==2.10.0
+numpy

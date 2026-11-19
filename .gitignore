@@ -1,0 +1,11 @@
+# secrets: the real API key lives only in .env on your own PC
+.env
+.env.*
+!.env.example
+
+# local environment and runtime files
+.venv/
+__pycache__/
+*.pyc
+voice_log.tsv
+clips/
