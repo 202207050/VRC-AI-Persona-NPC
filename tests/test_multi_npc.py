@@ -146,6 +146,21 @@ class MultiNpcTests(StoreFixture):
         reply = app.replies.get(timeout=5)
         self.assertEqual((reply["npc"], reply["heard"]), ("kwonjun", "권준님"))
 
+    def test_global_log_is_scoped_to_the_current_allowed_world(self):
+        path, _, _, brains = self._watch("ptt")
+        brain = brains.for_npc("kwonjun")
+        with patch.object(brain, "reply", wraps=brain.reply) as answer:
+            for marker, expected in (
+                (gaze.T + "[W04AI] GLOBAL on=1\n", True),
+                (gaze.T + "[W04AI] GLOBAL on=0\n", False),
+                (gaze.join("wrld_1234") + gaze.T + "[W04AI] GLOBAL on=1\n" + gaze.join(gaze.LOCAL), False),
+                (gaze.T + "[W04AI] GLOBAL on=1\n" + gaze.join("local:different"), False),
+                (gaze.T + "[W04AI] GLOBAL on=1\n" + gaze.join("local:different"), False),
+            ):
+                gaze.add(path, marker + gaze.PTT)
+                app.replies.get(timeout=5)
+                self.assertEqual(answer.call_args.kwargs.get("global_mode", False), expected)
+
     def test_gaze_routes_at_onset_and_ignores_other_npc_off(self):
         path, mic, tr, brains = self._watch("gaze")
         gaze.add(path, gaze.T + "[W04AI] NPC_STATE kwonjun=1 itoa=1\n"
@@ -156,14 +171,14 @@ class MultiNpcTests(StoreFixture):
         gaze.add(path, gaze.T + "[W04AI] LISTEN_ON npc=kwonjun\n"
                  + gaze.T + "[W04AI] LISTEN_OFF npc=itoa\n")
         gaze.wait_for(lambda: Path(app.LOG_PATH).read_text(encoding="utf-8").count("\tLISTEN_ON\t") >= 2, "switched")
-        mic.push(gaze.room(1.3))
+        mic.push(gaze.room(1.4))
         self.assertEqual(app.replies.get(timeout=5)["npc"], "itoa")
         self.assertIsNotNone(mic.tap)
         tr.text = "다음 대화"
         gaze.wait_for(lambda: len(self.itoa.history) == 2, "finished")
         time.sleep(0.15)  # allow the worker to release the one-turn gate
         mic.push(gaze.speech(1.0))
-        mic.push(gaze.room(1.3))
+        mic.push(gaze.room(1.4))
         self.assertEqual(app.replies.get(timeout=5)["npc"], "kwonjun")
 
 

@@ -106,7 +106,8 @@ def main():
         system = sys_text(fake.requests[1])
         blocks = fake.requests[1]["system"]
         ok(isinstance(blocks, list) and blocks[0].get("cache_control") == {"type": "ephemeral"}
-           and "Tester One" not in blocks[0]["text"] and "Tester One" in blocks[-1]["text"],
+           and "Tester One" not in blocks[0]["text"] and "Tester One" in blocks[1]["text"]
+           and blocks[-1]["text"] == persona_ai.content_order(0),
            "fixed rules+persona block is cached, the changing memory/impression comes after it")
         ok("다정함. 야경을 좋아함." in system and "공포 영화" in system and "Tester One" in system,
            "impression + memory + name are fed back into the system prompt")

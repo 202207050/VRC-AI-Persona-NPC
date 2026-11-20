@@ -82,7 +82,7 @@ def test_model_per_reply():
             req = brain._request_kwargs("안녕", "Alice")
             assert req["model"] == MODELS[name] and req["thinking"]["type"] == thinking
             assert req["output_config"]["effort"] == "low"
-            assert f"Claude {name.title()} 5.5" in req["system"][0]["text"]
+            # model name is no longer in the prompt (item 29: the NPC keeps its model secret)
             assert req["system"][0]["cache_control"] == {"type": "ephemeral"}
         result = brain.reply("날씨", on_interim=lambda _: itoa.apply({"settings": {"brain_model": MODELS["opus"]}}))
         assert result["model"] == MODELS["sonnet"] and "error" not in result

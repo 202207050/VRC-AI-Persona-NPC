@@ -71,25 +71,70 @@ def step_checks(tmp):
                                              {"do": "tv_raise", "target": "none", "gesture": "none"},
                                              {"do": "look_at", "target": "speaker", "gesture": "none"}], "lines": {"ko": "응"}})
     ok([s["do"] for s in out["steps"]] == ["look_at", "tv_left"], "one tv step per reply, moved to the end")
+    for name in ("tv_closer_max", "tv_farther_max", "tv_stop", "tv_pause",
+                 "tv_size_up", "tv_size_down", "tv_size_max", "tv_size_min", "tv_restart", "tv_resume", "tv_off"):
+        ok(name in enum["do"]["enum"] and persona_ai.clamp_steps([{"do": name}]) ==
+           [{"do": name, "target": "none", "gesture": "none"}], f"{name} reaches the world")
+    for data, field, expected in (
+        ({"do": "tv_seek"}, "seconds", 10),
+        ({"do": "tv_seek", "seconds": -45}, "seconds", -45),
+        ({"do": "tv_backlight", "percent": 0}, "percent", 0),
+        ({"do": "tv_backlight", "action": "dimmer"}, "action", "dimmer"),
+    ):
+        ok(persona_ai.clamp_steps([data])[0][field] == expected, f"{data} forwards {field}")
+    ok(not persona_ai.clamp_steps([{"do": "tv_backlight", "percent": True},
+                                  {"do": "tv_seek", "seconds": float("inf")}]),
+       "foreign TV argument types do not reach the world")
+    faces = [{"do": "emote", "emotion": emotion, "duration": duration}
+             for emotion, duration in [("happy", 3), ("surprised", 40), ("sad", 0.1)]]
+    steps = persona_ai.clamp_steps(faces)
+    ok([(s["emotion"], s["duration"]) for s in steps] ==
+       [("happy", 3), ("surprised", 10), ("sad", 0.5)], "emotes retain order and bounded durations")
+    ok(persona_ai.clamp_steps([{"do": "emote", "emotion": "happy"}])[0]["duration"] == 3
+       and not persona_ai.clamp_steps([{"do": "emote", "emotion": "unknown"}]),
+       "missing emote duration defaults to 3 and unknown emotions are dropped")
+    ok("tv_size_set" in enum["do"]["enum"] and enum["inches"]["type"] == "number"
+       and persona_ai.clamp_steps([{"do": "tv_size_set", "inches": 183.5}]) ==
+       [{"do": "tv_size_set", "target": "none", "gesture": "none", "inches": 183.5}],
+       "exact screen size is passed to the stick for snapping and fitting")
+    for value in (None, "180", True, -10, float("nan"), float("inf")):
+        ok(persona_ai.clamp_steps([{"do": "tv_size_set", "inches": value}, {"do": "tv_size_min"}]) ==
+           [{"do": "tv_size_min", "target": "none", "gesture": "none"}], "invalid size does not shadow a valid TV step")
     ok(persona_ai._clamp_reply({"steps": [None, 3, {"do": "fly"}], "lines": {"ko": "응"}})["steps"] == [],
        "junk and unknown steps are dropped")
     rules = persona_ai.RULES
     for piece in ("- follow:", "시키지 않았는데 따라가지 않는다", "- come:", "- stop:", "- go_sit:", "tv_closer/tv_farther",
-                  "한 대답에 하나만, 마지막 단계로 둔다", 'target과 gesture를 "none"으로 둔다', "sit: 소파에 가서 앉는다",
-                  "계속 앉아(누워) 있으려면 sit(lie)을 넣는다", 'target "bridge_view"는 다리가 보이는 창가다'):
+                  "TV 명령은 대답당 하나를 마지막에 넣고", 'target과 gesture를 "none"으로 둔다', "sit: 소파에 가서 앉는다",
+                  "대화 중에는 현재 자세를 유지한다", '"계속해"에는 새 이동·자세·TV 동작을 넣거나',
+                  'target "bridge_view"는 다리가 보이는 창가다'):
         ok(piece in rules, f"RULES has: {piece}")
 
     # current pose (NPC_POSE) goes into the changing part of the prompt, never the cached part
     store = new_store(tmp, "steps")
     brain = persona_ai.Brain("fake", store)
     fixed0, changing0 = brain.system_parts()
+    metadata = {"speaker": "원문 시험", "source": "PC 주인 마이크", "time": "2026-11-20T12:00:00+09:00",
+                "raw": "  사공사  흐흐흐흐흐? "}
+    store.after_reply("원문 시험", "404 흐흐흐?", '{"lines":{"ko":"응"}}', utterance=metadata)
+    quoted = persona_ai._clamp_reply({"lines": {"ko": "방금 “12345개”라고 했어."}}, prior_raw=" 12345개 ")
+    ok(quoted["line"] == "방금 “ 12345개 ”라고 했어.", "quoted STT keeps numbers and spacing verbatim")
+    persisted = store._clean_history(json.loads(json.dumps(store.history, ensure_ascii=False)))
+    ok(persisted[-2]["utterance"] == metadata, "history retains exact STT and attribution after reloading")
+    for level in (0, 1, 2):
+        request = brain._request_kwargs("방금 뭐라고 했어?", "원문 시험", content_level=level, utterance=metadata)
+        ok(request["system"][0]["text"] == fixed0 and any(
+            block["text"] == persona_ai.content_order(level) for block in request["system"][1:]),
+           f"conversation level {level} follows the fixed cache block")
+        ok(metadata["raw"] in request["messages"][-3]["content"],
+           f"conversation level {level} retains the previous raw transcription in history")
     ok("지금 내 자세" not in changing0, "standing: no pose note")
     store.pose = "sit"
     fixed1, changing1 = brain.system_parts()
-    ok(fixed1 == fixed0 and "소파에 앉아 있다" in changing1 and "steps에 sit을" in changing1, "sitting is told in the changing part")
+    ok(fixed1 == fixed0 and "소파에 앉아 있다" in changing1 and "월드가 먼저 일으켜" in changing1,
+       "sitting is told in the changing part and the world handles standing before movement")
     store.pose = "lie"
     ok("소파에 누워 있다" in brain.system_parts()[1], "lying is told too")
-    ok("따라다니기" in brain.about_me() and "TV 팔" in brain.about_me() and "문 쪽" not in brain.about_me(),
+    ok("따라다니기" in brain.about_me() and "화면 최대 크기" in brain.about_me() and "문 쪽" not in brain.about_me(),
        "about me lists the new abilities")
 
     # cloud: no follow / come, and the exported file on disk is current

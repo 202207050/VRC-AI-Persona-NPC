@@ -164,6 +164,7 @@
     <h3>최근 대화</h3>
     <p class="sub">NPC가 지금 떠올리고 있는 최근 대화입니다(최대 <span id="maxHistory"></span>번 주고받은 것까지). 이상한 대화는 지워서 잊게 할 수 있습니다.</p>
     <label class="check"><input type="checkbox" id="keepHistory"><span>앱을 껐다 켜도 최근 대화 이어가기 <span class="sub">(끄면 지금처럼 앱을 다시 켤 때 처음부터 시작합니다)</span></span></label>
+    <label class="check"><input type="checkbox" id="filterOverheard"><span>다른 사람에게 한 말 넘기기 <span class="sub">(NPC 이름을 부르거나 대답 뒤 20초 안에 이어서 말하면 바로 대답합니다)</span></span></label>
     <div id="history"></div>
     <div class="row">
       <button id="refresh">새로 고침</button>
@@ -250,6 +251,7 @@ function render(keepPersona) {
   countPersona();
   $("autoUpdate").checked = S.settings.auto_update;
   $("keepHistory").checked = S.settings.keep_history;
+  $("filterOverheard").checked = S.settings.filter_overheard !== false;
   const supported = Array.isArray(S.model_options) && S.model_options.length > 0;
   $("voiceVersion").hidden = supported;
   for (const id of ["brainModel", "sttHints", "saveModel", "saveHints"]) $(id).disabled = !supported;
@@ -473,6 +475,7 @@ $("savePersona").onclick = async () => {
 };
 $("resetPersona").onclick = () => { $("persona").value = S.persona; syncNameFromText(); countPersona(); toast("마지막으로 저장한 글로 되돌렸습니다."); };
 $("autoUpdate").onchange = () => save({ settings: { auto_update: $("autoUpdate").checked } });
+$("filterOverheard").onchange = () => save({ settings: { filter_overheard: $("filterOverheard").checked } });
 $("keepHistory").onchange = () => save({ settings: { keep_history: $("keepHistory").checked } },
   $("keepHistory").checked ? "이제 앱을 껐다 켜도 최근 대화를 이어갑니다." : "앱을 다시 켜면 대화를 처음부터 시작합니다.");
 $("addPlayer").onclick = () => {

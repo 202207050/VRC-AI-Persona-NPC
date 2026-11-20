@@ -313,7 +313,8 @@ def affection_log_checks(folder):
         stop.set()
 
     tail = SimpleNamespace(path=str(file), world="local:test", player="", chat_epoch=0,
-                           npc_state=dict(app.DEFAULT_NPC_STATE, itoa=True), lines=lines, close=Mock())
+                           npc_state=dict(app.DEFAULT_NPC_STATE, itoa=True), lines=lines, close=Mock(),
+                           npc_epoch=dict.fromkeys(app.DEFAULT_NPC_STATE, 0))
     bridge = cfg_bridge.CfgBridge(store, log=logger)
     watcher_threads = SimpleNamespace(Lock=threading.Lock, Thread=Mock())
     with patch.object(app, "recent_output_logs", return_value=[str(file)]), \

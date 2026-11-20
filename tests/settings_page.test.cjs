@@ -246,6 +246,16 @@ test('effort and recall are saved for the selected NPC', async () => {
   assert.deepEqual(t.calls.at(-1).body, { npc: 'kwonjun', settings: { auto_recall: false } });
 });
 
+test('address filtering defaults on and can be disabled for the selected NPC', async () => {
+  const t = await setup();
+  t.get('npcSelect').value = 'itoa';
+  await t.get('npcSelect').onchange();
+  assert.equal(t.get('filterOverheard').checked, true);
+  t.get('filterOverheard').checked = false;
+  await t.get('filterOverheard').onchange();
+  assert.deepEqual(t.calls.at(-1).body, { npc: 'itoa', settings: { filter_overheard: false } });
+});
+
 test('compaction shows last time and sizes, validates thresholds, runs and undoes', async () => {
   const t = await setup({ modern: true });
   const status = t.get('compactStatus').textContent;

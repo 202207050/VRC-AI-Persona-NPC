@@ -255,7 +255,7 @@ def job_binding_checks(tmp):
         g.add(a, g.LISTEN_ON)
         g.wait_for(lambda: mic.tap is not None, "listening for client A")
         tr.text = "나는 앨리스야"
-        mic.push(np.concatenate([g.room(0.6), g.speech(1.2), g.room(1.2)]))
+        mic.push(np.concatenate([g.room(0.6), g.speech(1.2), g.room(1.4)]))
         reply = app.replies.get(timeout=5)
         ok(reply["heard"] == "나는 앨리스야" and brain.speakers == ["Alice A"],
            f"the utterance carries client A's player, not the last one to join ({brain.speakers})")
@@ -268,7 +268,7 @@ def job_binding_checks(tmp):
         g.wait_for(mic.drained, "first half heard")
         time.sleep(0.2)
         ok(bridge.apply({"op": "dictate", "target": "note_add"}, a) == "", "dictation armed mid-sentence")
-        mic.push(np.concatenate([g.speech(0.5), g.room(1.2)]))
+        mic.push(np.concatenate([g.speech(0.5), g.room(1.4)]))
         reply = app.replies.get(timeout=5)
         ok(reply["heard"] == "이건 그냥 대화" and brain.heard[-1] == "이건 그냥 대화" and not store.notes
            and bridge.dictate_target() is not None, "it is answered as talk and the dictation keeps waiting")
@@ -282,7 +282,7 @@ def job_binding_checks(tmp):
         g.wait_for(mic.drained, "dictation speech started")
         time.sleep(0.2)
         ok(bridge.apply({"op": "dictate", "target": "none"}, a) == "", "dictation cancelled mid-sentence")
-        mic.push(np.concatenate([g.speech(0.5), g.room(1.2)]))
+        mic.push(np.concatenate([g.speech(0.5), g.room(1.4)]))
         g.wait_for(lambda: any("dictate_gone" in line for line in g.tsv("STT")), "the job was dropped")
         ok(g.no_reply() and len(brain.heard) == heard and not store.notes,
            "a cancelled dictation is neither stored nor sent to the AI")
@@ -290,7 +290,7 @@ def job_binding_checks(tmp):
         # ---- and the normal case still works: armed before the sentence, stored as a memo
         ok(bridge.apply({"op": "dictate", "target": "note_add"}, a) == "", "dictation armed")
         tr.text = "귤을 좋아한다"
-        mic.push(np.concatenate([g.room(0.6), g.speech(1.2), g.room(1.2)]))
+        mic.push(np.concatenate([g.room(0.6), g.speech(1.2), g.room(1.4)]))
         g.wait_for(lambda: [n["text"] for n in store.notes] == ["귤을 좋아한다"], "dictated memo stored")
         ok(len(brain.heard) == heard and bridge.dictate_target() is None, "dictation goes to the memo, not to the AI")
     finally:

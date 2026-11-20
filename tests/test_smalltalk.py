@@ -56,7 +56,11 @@ def test_picker():
     chat = smalltalk.SmallTalk(None, random.Random(42))
     originals = json.loads(smalltalk.SCRIPT.read_text(encoding="utf-8"))["kwonjun,itoa"]
     assert len(chat.scripts) == len(originals) >= 40
-    assert all(raw == smalltalk.clamp_dialog(raw) for raw in originals)
+    assert all([{k: v for k, v in item.items() if k != "lines"} for item in raw] == smalltalk.clamp_dialog(raw)
+               for raw in originals)
+    assert all(all({"en", "ja"} <= item["lines"].keys() for item in dialog) for dialog in chat.scripts)
+    assert all("lines" not in item for item in chat.scripted())
+    assert all(item["lines"]["ko"] == item["line"] for item in chat.scripted(global_mode=True))
     assert len({tuple(item["line"] for item in dialog) for dialog in originals}) == len(originals)
     recent = []
     for _ in range(100):

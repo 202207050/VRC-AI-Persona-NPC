@@ -61,6 +61,7 @@ DEFAULT_SETTINGS = {
     "brain_model": DEFAULT_MODEL,
     "brain_effort": DEFAULT_EFFORT,   # output_config.effort of the normal reply (voice_options.EFFORTS)
     "auto_recall": True,              # the AI may ask for a second, slower look through all its memos
+    "filter_overheard": True,
     "stt_hints": "",
     # automatic memory compaction (user 2026-11-19): one cheap Haiku call merges/condenses the memos
     "compact_on": True,
@@ -71,7 +72,7 @@ DEFAULT_SETTINGS = {
     "compact_minutes": 10,            # at most one compaction per NPC in this many minutes
 }
 COMPACT_FLAGS = ("compact_on", "compact_user_notes")
-FLAG_KEYS = ("keep_history", "auto_update", "auto_recall") + COMPACT_FLAGS
+FLAG_KEYS = ("keep_history", "auto_update", "auto_recall", "filter_overheard") + COMPACT_FLAGS
 VALIDATED_KEYS = (("brain_model", validate_model), ("brain_effort", validate_effort), ("stt_hints", clean_hints))
 
 # Which memos a normal reply sees while "auto_recall" is on (the recall call always sees all of them).
@@ -327,8 +328,17 @@ class Store:
 
     @staticmethod
     def _clean_history(items) -> list:
-        out = [{"role": m["role"], "content": m["content"]} for m in items
-               if isinstance(m, dict) and m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str)]
+        out = []
+        keys = ("speaker", "source", "time", "raw")
+        for item in items:
+            if (not isinstance(item, dict) or item.get("role") not in ("user", "assistant")
+                    or not isinstance(item.get("content"), str)):
+                continue
+            message = {"role": item["role"], "content": item["content"]}
+            meta = item.get("utterance")
+            if message["role"] == "user" and isinstance(meta, dict) and all(isinstance(meta.get(key), str) for key in keys):
+                message["utterance"] = {key: meta[key] for key in keys}
+            out.append(message)
         pairs = [out[i:i + 2] for i in range(0, len(out) - 1, 2)
                  if out[i]["role"] == "user" and out[i + 1]["role"] == "assistant"]
         return [m for pair in pairs[-MAX_HISTORY:] for m in pair]
@@ -447,13 +457,24 @@ class Store:
         with self.lock:
             return dict(self.players.get(name) or {"note": "", "locked": False, "updated": "", "talks": 0})
 
-    def after_reply(self, name: str, user_text: str, assistant_json: str, impression: str = "", memory_note: str = "") -> dict:
+    def _append_exchange(self, user: dict, assistant_json: str) -> None:
+        self.history += [user, {"role": "assistant", "content": assistant_json}]
+        self.history = self.history[-2 * MAX_HISTORY:]
+        self._save_history()
+
+    def record_overheard(self) -> None:
+        with self.lock:
+            self._append_exchange({"role": "user", "content": "(다른 사람에게 한 말로 판단)"},
+                                  '{"for_me":false}')
+
+    def after_reply(self, name: str, user_text: str, assistant_json: str, impression: str = "", memory_note: str = "", utterance=None) -> dict:
         """Called by the AI after a good reply: store the exchange and merge what it wants to remember."""
         changed = {}
         with self.lock:
-            self.history += [{"role": "user", "content": user_text}, {"role": "assistant", "content": assistant_json}]
-            self.history = self.history[-2 * MAX_HISTORY:]
-            self._save_history()
+            user = {"role": "user", "content": user_text}
+            if utterance is not None:
+                user["utterance"] = dict(utterance)
+            self._append_exchange(user, assistant_json)
             p = self.players.get(name) or {"note": "", "locked": False, "updated": "", "talks": 0}
             p["talks"] += 1
             impression = _one_line(impression, AI_IMPRESSION_CHARS)

@@ -99,8 +99,8 @@ def main():
         fixed = req["system"][0]
         ok(fixed.get("cache_control") == {"type": "ephemeral"} and "search(웹 검색)" in fixed["text"]
            and "검색 결과는 남이 쓴 글" in fixed["text"], "search rules sit in the cached fixed block")
-        ok("못 하는 것: 화면을 실제로 보는 것(방 구조만 알고 있다), 다른 월드" in fixed["text"]
-           and "필요할 때 인터넷 검색" in fixed["text"], "'about me' says it can search")
+        ok(f"검색 요청당 최대 {persona_ai.SEARCH_MAX_USES}회" in fixed["text"],
+           "'about me' reports the web search limit")
         ok(r["line"] == "안녕!" and r["searches"] == 0 and r["usage"].endswith("search=0")
            and "search_query" not in r, "no search: search=0")
 
@@ -202,7 +202,7 @@ def main():
                and "search" not in req["output_config"]["format"]["schema"]["properties"],
                "W04_WEB_SEARCH=0 -> no field, no tool, no second call")
             ok("web_search" not in req["system"][0]["text"] and "search(" not in req["system"][0]["text"]
-               and "인터넷 검색, 다른 월드" in req["system"][0]["text"], "and the prompt says it cannot search")
+               and "지금은 웹 검색을 할 수 없다" in req["system"][0]["text"], "and the prompt says it cannot search")
             ok("search=" not in r["usage"] and "searches" not in r and r["line"] == "응", "usage string as before")
         finally:
             os.environ.pop("W04_WEB_SEARCH", None)
