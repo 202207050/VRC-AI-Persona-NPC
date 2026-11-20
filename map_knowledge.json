@@ -1,0 +1,382 @@
+{
+    "version": 1,
+    "scene": "Assets/W04/Scenes/W04_Probe.unity",
+    "entries": [
+        {
+            "name": "소파",
+            "scene_path": "W02Lounge/Furniture/Sofa_TV",
+            "zone": "거실 TV 맞은편",
+            "purpose": "앉거나 누워 쉬는 곳",
+            "target": "sofa",
+            "aliases": [
+                "쇼파",
+                "쿠션",
+                "sofa",
+                "couch",
+                "ソファ"
+            ],
+            "position": {
+                "x": 4.014999866485596,
+                "y": 0.0,
+                "z": -1.0
+            },
+            "can_press": false,
+            "stand_positions": [
+                {
+                    "npc": "kwonjun",
+                    "position": {
+                        "x": 5.349999904632568,
+                        "y": 0.03333336114883423,
+                        "z": -0.6000000238418579
+                    }
+                },
+                {
+                    "npc": "itoa",
+                    "position": {
+                        "x": 5.349999904632568,
+                        "y": 0.03333336114883423,
+                        "z": -0.6000000238418579
+                    }
+                }
+            ]
+        },
+        {
+            "name": "TV",
+            "scene_path": "W02Lounge/MediaWall/TVMount/ArmPivot/ArmLink/TiltPivot/SizeRoot/VideoPlayer/Screen",
+            "zone": "거실 미디어 벽",
+            "purpose": "영상을 보는 화면",
+            "target": "tv",
+            "aliases": [
+                "티비",
+                "티브이",
+                "텔레비전",
+                "television",
+                "テレビ"
+            ],
+            "position": {
+                "x": -4.48799991607666,
+                "y": 1.4500000476837159,
+                "z": 3.725290298461914e-9
+            },
+            "can_press": false,
+            "stand_positions": [
+                {
+                    "npc": "kwonjun",
+                    "position": {
+                        "x": -0.800000011920929,
+                        "y": 0.03333336114883423,
+                        "z": -1.399999976158142
+                    }
+                },
+                {
+                    "npc": "itoa",
+                    "position": {
+                        "x": -0.800000011920929,
+                        "y": 0.03333336114883423,
+                        "z": -1.399999976158142
+                    }
+                }
+            ]
+        },
+        {
+            "name": "창가",
+            "scene_path": "W04_Places/Window_Stand",
+            "zone": "거실 유리창 안쪽",
+            "purpose": "도시와 밤하늘을 보는 자리",
+            "target": "window",
+            "aliases": [
+                "유리창",
+                "창문",
+                "window",
+                "窓"
+            ],
+            "position": {
+                "x": 7.0,
+                "y": 0.03333336114883423,
+                "z": -3.25
+            },
+            "can_press": false,
+            "stand_positions": [
+                {
+                    "npc": "kwonjun",
+                    "position": {
+                        "x": 7.0,
+                        "y": 0.03333336114883423,
+                        "z": -3.25
+                    }
+                },
+                {
+                    "npc": "itoa",
+                    "position": {
+                        "x": 7.0,
+                        "y": 0.03333336114883423,
+                        "z": -3.25
+                    }
+                }
+            ]
+        },
+        {
+            "name": "다리가 보이는 창가",
+            "scene_path": "W04_Places/BridgeView_Stand",
+            "zone": "거실 고정 유리창 안쪽",
+            "purpose": "창 아래 다리와 도시가 보이는 자리",
+            "target": "bridge_view",
+            "aliases": [
+                "다리 전망",
+                "다리 보이는",
+                "교량",
+                "bridge view",
+                "橋の見える窓"
+            ],
+            "position": {
+                "x": 4.175000190734863,
+                "y": 0.03333336114883423,
+                "z": -3.200000047683716
+            },
+            "can_press": false,
+            "stand_positions": [
+                {
+                    "npc": "kwonjun",
+                    "position": {
+                        "x": 4.175000190734863,
+                        "y": 0.03333336114883423,
+                        "z": -3.200000047683716
+                    }
+                },
+                {
+                    "npc": "itoa",
+                    "position": {
+                        "x": 4.175000190734863,
+                        "y": 0.03333336114883423,
+                        "z": -3.200000047683716
+                    }
+                }
+            ]
+        },
+        {
+            "name": "펜 거치대",
+            "scene_path": "W02LoungeExtras/QvPen",
+            "zone": "거실 안쪽 TV 반대편 벽",
+            "purpose": "손님이 꺼내 그림을 그리는 펜",
+            "target": "",
+            "aliases": [
+                "펜",
+                "그림펜",
+                "그림 그리는 펜",
+                "qvpen",
+                "pen",
+                "marker",
+                "ペン"
+            ],
+            "position": {
+                "x": 11.680000305175782,
+                "y": 1.0,
+                "z": -0.15000000596046449
+            },
+            "can_press": false,
+            "stand_positions": []
+        },
+        {
+            "name": "거울",
+            "scene_path": "W02LoungeExtras/WindowMirror",
+            "zone": "거실 창가",
+            "purpose": "아바타 모습을 비추는 창 거울",
+            "target": "",
+            "aliases": [
+                "미러",
+                "mirror",
+                "鏡"
+            ],
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "can_press": false,
+            "stand_positions": []
+        },
+        {
+            "name": "거울 스위치",
+            "scene_path": "W02LoungeExtras/WindowMirror/WindowMirrorSwitch/Switch_Root",
+            "zone": "거실 창가 거울 옆",
+            "purpose": "거울을 끄거나 품질을 고르는 네 버튼",
+            "target": "",
+            "aliases": [
+                "미러 스위치",
+                "거울 버튼",
+                "mirror switch",
+                "鏡のスイッチ"
+            ],
+            "position": {
+                "x": 11.944999694824219,
+                "y": 1.1164400577545167,
+                "z": -3.195000171661377
+            },
+            "can_press": true,
+            "stand_positions": []
+        },
+        {
+            "name": "야간 밝기 슬라이더",
+            "scene_path": "W02LoungeExtras/NightMode/Slider_Night",
+            "zone": "거실 안쪽 조작 벽",
+            "purpose": "밤 풍경의 밝기를 조절",
+            "target": "",
+            "aliases": [
+                "야간 모드",
+                "야간 슬라이더",
+                "밤 모드",
+                "night slider",
+                "夜間モード"
+            ],
+            "position": {
+                "x": 11.694999694824219,
+                "y": 1.5499999523162842,
+                "z": -1.0
+            },
+            "can_press": true,
+            "stand_positions": []
+        },
+        {
+            "name": "방문 기록판",
+            "scene_path": "W02LoungeExtras/JoinLogBoard",
+            "zone": "거실 안쪽 벽",
+            "purpose": "누가 들어오고 나갔는지와 현재 인원 표시",
+            "target": "",
+            "aliases": [
+                "방명록",
+                "기록판",
+                "출입 기록",
+                "guestbook",
+                "ゲストブック"
+            ],
+            "position": {
+                "x": 10.875,
+                "y": 1.649999976158142,
+                "z": 1.9880000352859498
+            },
+            "can_press": false,
+            "stand_positions": []
+        },
+        {
+            "name": "커피 테이블",
+            "scene_path": "W02Lounge/Furniture/CoffeeTable",
+            "zone": "거실 소파 앞",
+            "purpose": "낮은 테이블",
+            "target": "",
+            "aliases": [
+                "탁자",
+                "테이블",
+                "coffee table",
+                "テーブル"
+            ],
+            "position": {
+                "x": 2.0950264930725099,
+                "y": 0.0,
+                "z": -0.7049736976623535
+            },
+            "can_press": false,
+            "stand_positions": []
+        },
+        {
+            "name": "TV 조종 스틱",
+            "scene_path": "W02Lounge/MediaWall/TVFlightStick",
+            "zone": "거실 TV 조작 구역",
+            "purpose": "잡고 TV 팔과 화면 크기를 조절",
+            "target": "",
+            "aliases": [
+                "TV 스틱",
+                "조종기",
+                "플라이트 스틱",
+                "flight stick",
+                "操縦桿"
+            ],
+            "position": {
+                "x": 4.289999961853027,
+                "y": 0.5149999856948853,
+                "z": 1.059999942779541
+            },
+            "can_press": false,
+            "stand_positions": []
+        },
+        {
+            "name": "TV 백라이트 조절",
+            "scene_path": "W02Lounge/MediaWall/TVSettingsPanel/TVArmControls/BacklightBrightness",
+            "zone": "거실 TV 설정 화면",
+            "purpose": "TV 뒤 조명의 밝기를 조절",
+            "target": "",
+            "aliases": [
+                "백라이트",
+                "TV 조명",
+                "backlight",
+                "バックライト"
+            ],
+            "position": {
+                "x": 4.038497447967529,
+                "y": 0.543526291847229,
+                "z": 1.274999976158142
+            },
+            "can_press": true,
+            "stand_positions": []
+        },
+        {
+            "name": "NPC 스위치",
+            "scene_path": "W04NpcSwitches",
+            "zone": "거실 설정 창 근처",
+            "purpose": "NPC별로 켜고 끄는 스위치",
+            "target": "",
+            "aliases": [
+                "NPC 켜기",
+                "NPC 끄기",
+                "npc switch",
+                "NPCスイッチ"
+            ],
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "can_press": true,
+            "stand_positions": []
+        },
+        {
+            "name": "설정 창",
+            "scene_path": "W04ConfigPanel",
+            "zone": "거실 설정 구역",
+            "purpose": "NPC 성격과 인상·기억을 보는 화면",
+            "target": "",
+            "aliases": [
+                "설정 패널",
+                "설정 버튼",
+                "settings panel",
+                "設定パネル"
+            ],
+            "position": {
+                "x": 7.550000190734863,
+                "y": 1.6799999475479127,
+                "z": 3.9000000953674318
+            },
+            "can_press": true,
+            "stand_positions": []
+        },
+        {
+            "name": "채팅 창",
+            "scene_path": "W04ChatPanel",
+            "zone": "거실 채팅 구역",
+            "purpose": "NPC에게 글로 말을 거는 화면",
+            "target": "",
+            "aliases": [
+                "채팅 패널",
+                "채팅 버튼",
+                "chat panel",
+                "チャットパネル"
+            ],
+            "position": {
+                "x": 8.800000190734864,
+                "y": 1.6799999475479127,
+                "z": 3.9000000953674318
+            },
+            "can_press": true,
+            "stand_positions": []
+        }
+    ]
+}

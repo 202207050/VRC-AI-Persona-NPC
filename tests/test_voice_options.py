@@ -14,7 +14,7 @@ import cfg_bridge
 import persona_ai
 import persona_npc_app as app
 from persona_store import Store
-from voice_options import MODELS, clean_hints, model_options
+from voice_options import MODELS, STT_VOCABULARY, clean_hints, model_options
 
 
 def test_storage_and_cfg():
@@ -104,9 +104,10 @@ def test_stt():
     hints = clean_hints("404 -> 사공사\n사공사 -> 404\n이 -> E\n이 토아 -> 이토아\nA+B -> 별\n권준")
     got, reason, _ = app.judge(audio, 1000, tr, hints)
     assert got == "사공사님, 1404 4040 user404 404abc. 404! 이토아야, 별?" and reason.startswith("ok")
-    assert tr.model.transcribe.call_args.kwargs["initial_prompt"] == "404, 사공사, 이, E, 이 토아, 이토아, A+B, 별, 권준"
+    assert tr.model.transcribe.call_args.kwargs["initial_prompt"] == ", ".join(
+        (*STT_VOCABULARY, "404", "사공사", "이", "E", "이 토아", "A+B", "별"))
     assert app.judge(audio, 1000, tr)[0] == heard
-    assert tr.model.transcribe.call_args.kwargs["initial_prompt"] is None
+    assert tr.model.transcribe.call_args.kwargs["initial_prompt"] == ", ".join(STT_VOCABULARY)
     # Transcribers without prompt support still get their existing run(audio) call.
     plain = SimpleNamespace(run=lambda audio: {"text": "404"})
     assert app.judge(audio, 1000, plain, hints)[0] == "사공사"

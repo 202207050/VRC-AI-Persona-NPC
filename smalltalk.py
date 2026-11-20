@@ -77,6 +77,10 @@ class SmallTalk:
                     if content_level:
                         options["content_level"] = content_level
                     dialog = clamp_dialog(brain.smalltalk(profiles, **options), global_mode)
+                    if global_mode and dialog and any(
+                        not row.get("lines", {}).get(lang) for row in dialog for lang in ("en", "ja")
+                    ):
+                        dialog = None
                     source = "ai" if dialog else "fallback"
             except Exception:
                 source = "fallback"

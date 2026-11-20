@@ -62,7 +62,7 @@ from urllib.parse import parse_qs
 import numpy as np
 
 import cfg_bridge
-from voice_options import DEFAULT_MODEL, MODELS, hint_prompt, parse_hints, replace_hints
+from voice_options import DEFAULT_MODEL, MODELS, hint_prompt, parse_hints, replace_hints, whisper_beam_size
 from datetime import datetime
 
 import persona_ai
@@ -86,10 +86,12 @@ VAD_ONSET_VOICED = 5
 VAD_END_SILENCE_S = 1.3            # default quiet time before ending the utterance
 FRAGMENT_GAP_S = 2.0               # measured from the last voiced frame to the next speech onset
 VAD_MAX_S = 15.0                   # an utterance is cut at this length
-VAD_MIN_SPEECH_S = MIN_CLIP_S      # less loud time than this = a blip (cough, click), dropped
+VAD_MIN_SPEECH_S = 7 * VAD_FRAME_S  # 210 ms of voiced frames; the PTT hold minimum is separate
 VAD_TAIL_S = 0.25                  # quiet kept after the last loud step (the rest is trimmed for Whisper)
-VAD_MIN_THRESHOLD = 0.006          # never call anything quieter than this speech (about -44 dBFS)
-VAD_FLOOR_RATIO = 3.5              # loud = this many times the room's noise floor
+VAD_MIN_THRESHOLD = 0.0025         # absolute guard when the noise floor is very low
+VAD_FLOOR_RATIO = 2.8              # onset must also stand out from the microphone's noise floor
+VAD_MIN_CLIP_RMS = 0.0015          # the pre-roll and tail dilute RMS after VAD has already checked the frames
+VAD_WEAK_CLIP_RMS = 0.006          # extra Whisper checks for quiet clips and newly allowed short clips
 LISTEN_STALE_S = 120               # LISTEN_ON ends by itself if that VRChat log writes nothing this long
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(HERE, "voice_log.tsv")
@@ -406,11 +408,15 @@ class UtteranceDetector:
         self.rest = data[end:]
         return out
 
+    @property
+    def onset_threshold(self):
+        return max(VAD_MIN_THRESHOLD, self.floor * VAD_FLOOR_RATIO)
+
     def _frame(self, f: np.ndarray):
         rms = float(np.sqrt(np.mean(f * f)))
         up = 0.001 if self.active else 0.003
         self.floor = max(0.0005, self.floor + (rms - self.floor) * (0.2 if rms < self.floor else up))
-        threshold = max(VAD_MIN_THRESHOLD, self.floor * VAD_FLOOR_RATIO)
+        threshold = self.onset_threshold
         if not self.active:
             self.pre.append(f)
             self.recent.append(rms >= threshold)
@@ -444,6 +450,11 @@ TRANSCRIPT_RUN = re.compile(r"([^\s\d])\1{5,}|([가-힣ㄱ-ㅎㅏ-ㅣA-Za-z]{1,4
 SENTENCE_END = re.compile(
     r'''[.!?。！？…]["'”’」』)]*$|'''
     r"(?:니다|니까|어요|아요|세요|해요|예요|네요|군요|겠다|한다|했다|이다|더라|잖아|줄래|할래|거야|구나|했어)$")
+STT_FILLERS = re.compile(r"(?:[아어으음흠허헉앗와오하흐헤에엥헐ㅋㅎㅠㅜ]+|uh|um|hmm|ah|oh)", re.IGNORECASE)
+STT_SHORT_WORDS = frozenset(
+    ("네 예 응 넵 아니 안돼 맞아 안녕 좋아 싫어 됐어 그래 잠깐 "
+     "앉아 멈춰 거울 권준 켜 꺼 가 줘 해 왜 뭐 뭐해 누가 언제 어디 지금 TV OK NO").casefold().split()
+)
 
 
 def collapse_transcript_runs(text):
@@ -455,12 +466,14 @@ def is_fragment(text):
 
 class Transcriber:
     supports_initial_prompt = True
+    beam_size = None
 
     def __init__(self, model_name: str):
         import torch
         import whisper
         self.whisper = whisper
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.beam_size = whisper_beam_size(os.environ.get("W04_WHISPER_BEAM_SIZE"))
         # model folder: WHISPER_MODEL_DIR in .env, else Whisper's own default (%USERPROFILE%\.cache\whisper)
         root = os.environ.get("WHISPER_MODEL_DIR") or os.path.join(
             os.getenv("XDG_CACHE_HOME", os.path.join(os.path.expanduser("~"), ".cache")), "whisper")
@@ -483,48 +496,81 @@ class Transcriber:
         self.load_ms = now_ms() - t0
 
     def run(self, audio: np.ndarray, initial_prompt: str = None):
+        decode_options = {"beam_size": self.beam_size} if self.beam_size else {}
         result = self.model.transcribe(
             audio, language="ko", task="transcribe", fp16=(self.device == "cuda"),
             temperature=0.0, condition_on_previous_text=False, without_timestamps=True,
-            no_speech_threshold=0.6, logprob_threshold=-1.0, initial_prompt=initial_prompt)
+            no_speech_threshold=0.6, logprob_threshold=-1.0, initial_prompt=initial_prompt, **decode_options)
         return result
 
 
-def judge(audio: np.ndarray, held_ms: float, tr: Transcriber, hints: str = "", raw_sink=None):
+def transcript_key(text):
+    return "".join(char for char in text.casefold() if char.isalnum())
+
+
+def is_unclear_transcript(text, pairs):
+    word = transcript_key(text)
+    if word in STT_SHORT_WORDS or word.isdecimal() or any(word == transcript_key(target) for _, target in pairs):
+        return False
+    return not word or len(word) <= 2 or STT_FILLERS.fullmatch(word) is not None
+
+
+def checked_transcript(result, require_clear_speech):
+    segs = result.get("segments", [])
+    if segs and all(s.get("no_speech_prob", 0) > 0.6 and s.get("avg_logprob", 0) < -1.0 for s in segs):
+        return "", "no_speech"
+    text = collapse_transcript_runs(" ".join(result.get("text", "").split()))
+    if not text:
+        return "", "empty"
+    if require_clear_speech and not any(
+        s.get("no_speech_prob", 1) < 0.5 and s.get("avg_logprob", -math.inf) >= -0.75 for s in segs
+    ):
+        return "", "weak_speech"
+    if HALLUCINATIONS.search(text):
+        return "", f"hallucination '{text}'"
+    return text, ""
+
+
+def judge(audio: np.ndarray, held_ms: float, tr: Transcriber, hints: str = "", raw_sink=None,
+          vad_speech_s: float | None = None):
     """Returns (text or '', reason, stt_ms). held_ms = how long jump was held (from the world's log line)."""
     dur = audio.size / RATE
     if 0 <= held_ms < MIN_CLIP_S * 1000:
         return "", f"too_short held={held_ms:.0f}ms", 0.0
     rms = float(np.sqrt(np.mean(audio ** 2))) if audio.size else 0.0
-    if rms < MIN_RMS:
+    if rms < (VAD_MIN_CLIP_RMS if vad_speech_s is not None else MIN_RMS):
         return "", f"too_quiet rms={rms:.4f}", 0.0
     t0 = now_ms()
     pairs = parse_hints(hints)
     prompt = hint_prompt(pairs)
     # Older/offline transcribers can opt out; replacement still works without prompt support.
-    result = (tr.run(audio, initial_prompt=prompt) if prompt and getattr(tr, "supports_initial_prompt", False)
+    prompted = getattr(tr, "supports_initial_prompt", False)
+    result = (tr.run(audio, initial_prompt=prompt) if prompted
               else tr.run(audio))
-    stt_ms = now_ms() - t0
-    segs = result.get("segments", [])
-    if segs and all(s.get("no_speech_prob", 0) > 0.6 and s.get("avg_logprob", 0) < -1.0 for s in segs):
-        return "", "no_speech", stt_ms
-    raw_text = result.get("text", "")
-    if raw_sink is not None:
-        raw_sink.append(raw_text)
-    text = collapse_transcript_runs(" ".join(raw_text.split()))
-    if not text:
-        return "", "empty", stt_ms
-    if HALLUCINATIONS.search(text):
-        return "", f"hallucination '{text}'", stt_ms
-    return collapse_transcript_runs(replace_hints(text, pairs)), f"ok rms={rms:.4f} dur={dur:.2f}s", stt_ms
+    require_clear_speech = vad_speech_s is not None and (vad_speech_s < MIN_CLIP_S or rms < VAD_WEAK_CLIP_RMS)
+    text, reason = checked_transcript(result, require_clear_speech)
+    if text:
+        text = collapse_transcript_runs(replace_hints(text, pairs))
+        if is_unclear_transcript(text, pairs):
+            text, reason = "", "unclear_short"
+            if prompted:
+                retry = tr.run(audio)
+                candidate, _ = checked_transcript(retry, require_clear_speech=True)
+                candidate = collapse_transcript_runs(replace_hints(candidate, pairs))
+                if candidate and not is_unclear_transcript(candidate, pairs):
+                    result, text, reason = retry, candidate, ""
+    if raw_sink is not None and reason != "no_speech":
+        raw_sink.append(result.get("text", ""))
+    return text, reason or f"ok rms={rms:.4f} dur={dur:.2f}s", now_ms() - t0
 
 
 # ---------------------------------------------------------------- world link
 
 class SearchReply(dict):
-    def __init__(self, payload, job, final=False):
+    def __init__(self, payload, job, final=False, speaker=""):
         super().__init__(payload)
         self.tail, self.npc_epoch, self.final = job.tail, job.npc_epoch, final
+        self.speaker = speaker
 
     def valid(self):
         npc = self["npc"]
@@ -538,17 +584,34 @@ class ReplyQueue(queue.Queue):
     def __init__(self):
         super().__init__()
         self.protected_until = {}
+        self.statuses = {}
+
+    def status(self, state, tail, npc, epoch, speaker):
+        if tail is None:
+            return
+        with self.not_empty:
+            key = tail, npc, state
+            self.statuses.pop(key, None)
+            self.statuses[key] = epoch, time.monotonic() + 10, {"state": state, "speaker": speaker}
+            self.not_empty.notify_all()
 
     def discard(self, keep):
         with self.mutex:
             self.queue = collections.deque(reply for reply in self.queue if keep(reply))
 
-    def get_for_world(self, timeout):
+    def get_for_world(self, timeout, include_state=False):
         deadline = time.monotonic() + timeout
         with self.not_empty:
             while True:
                 now = time.monotonic()
                 wake = deadline
+                for key, (epoch, expires, status) in tuple(self.statuses.items()):
+                    tail, npc, _ = key
+                    if expires <= now or epoch != tail.npc_epoch[npc] or not tail.npc_state[npc]:
+                        del self.statuses[key]
+                    elif include_state:
+                        del self.statuses[key]
+                        return status
                 for i, reply in enumerate(self.queue):
                     if isinstance(reply, SearchReply) and not reply.valid():
                         continue
@@ -601,6 +664,7 @@ class Utterance:
     dictate: object = UNBOUND
     started: float = 0.0
     ended: float = 0.0
+    vad_speech_s: float | None = None
 
     def context(self):
         return self.tail, self.npc, self.npc_epoch, self.speaker
@@ -628,6 +692,26 @@ def make_reply(text: str, stt_ms: float) -> dict:
     }
 
 
+def poll_output(reply):
+    if isinstance(reply, SearchReply) and not reply.final:
+        return {"state": "searching", "speaker": reply.speaker}
+    line = reply.get("line")
+    if not line or reply.get("lines"):
+        return reply
+    if line == MISSED_LINE:
+        text = (line, "Huh? I didn't catch that.", "ん？よく聞こえなかったよ。")
+    elif line.startswith("들은 말: "):
+        heard = reply.get("heard", "")
+        language_reply = persona_ai.output_language_reply(heard)
+        if language_reply is not None:
+            return dict(reply, **language_reply)
+        text = (line, "I heard: " + heard, "聞こえた言葉： " + heard)
+    else:
+        return reply
+    return dict(reply, lines=persona_ai.localized_lines(
+        tuple(s if len(s) <= WORLD_MAX_LINE else s[:WORLD_MAX_LINE - 1] + "…" for s in text)))
+
+
 class Handler(BaseHTTPRequestHandler):
     """/poll and /ping are for the world (GET only, no token: unchanged).
     /cfg is for the world's settings panel: no token, open only shortly after the panel says CFG_OPEN.
@@ -636,7 +720,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
-    def _send(self, body: str, code: int = 200, ctype: str = "text/plain") -> None:
+    def _send(self, body: str, code: int = 200, ctype: str = "text/plain") -> bool:
         data = body.encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", ctype + "; charset=utf-8")
@@ -650,8 +734,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Security-Policy",
                              "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
                              "connect-src 'self'; base-uri 'none'; form-action 'none'")
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.end_headers()
+            self.wfile.write(data)
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
+            return False
+        return True
 
     # ---- settings: who may come in
 
@@ -705,14 +794,27 @@ class Handler(BaseHTTPRequestHandler):
                 self._send("{}", 403, "application/json")
             elif path == "/poll":
                 try:
-                    reply = replies.get_for_world(POLL_WAIT_S)
+                    reply = replies.get_for_world(POLL_WAIT_S, include_state=True)
                 except queue.Empty:
                     self._send("{}")
                 else:
+                    outgoing = poll_output(reply)
                     try:
-                        self._send(json.dumps(reply, ensure_ascii=False))
+                        sent = self._send(json.dumps(outgoing, ensure_ascii=False))
                     except OSError:
                         replies.retry_search(reply)
+                    else:
+                        if not sent:
+                            replies.retry_search(reply)
+                            return
+                        try:
+                            for row in outgoing.get("dialog") or [outgoing]:
+                                if row.get("line"):
+                                    lines = row.get("lines") or {}
+                                    log("POLL_LINES", f"npc={row.get('npc', '')}\tseq={outgoing.get('seq', '')}\t"
+                                                      f"en={int(bool(lines.get('en')))}\tja={int(bool(lines.get('ja')))}")
+                        except OSError:
+                            pass
             else:
                 self._send(f"pong {t0:.0f}")
         elif path == "/cfg":
@@ -1074,7 +1176,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
         with hint_store.lock:
             hints = hint_store.settings["stt_hints"]
         raw = []
-        text, reason, stt_ms = judge(job.audio, job.held_ms, tr, hints, raw_sink=raw)
+        text, reason, stt_ms = judge(job.audio, job.held_ms, tr, hints, raw_sink=raw, vad_speech_s=job.vad_speech_s)
         clip = save_clip(job.audio, job.seq) if save else ""
         return text, reason, stt_ms, clip, dictate, raw[0] if raw else ""
 
@@ -1105,6 +1207,9 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                     and (stop is None or not stop.is_set()))
 
         if text and selected_brain is not None:
+            if search_valid():
+                replies.status("thinking", job.tail, npc, job.npc_epoch, speaker)
+
             def interim(r):
                 # web search turn: show "잠깐만, 찾아볼게!" now; "more" makes the world poll again for the answer
                 nonlocal searching
@@ -1117,7 +1222,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                         if not search_valid():
                             return
                         turn["stage"] = "search"
-                    replies.put(SearchReply(first, job) if searching else first)
+                    replies.put(SearchReply(first, job, speaker=speaker) if searching else first)
                 doing = "기억 되짚는 중" if r.get("interim") == "recall" else "검색 중"
                 log("REPLY", f"seq={seq}\tinterim\t{first.get('line', '')}", say=f"{st.npc_name()}: {first.get('line', '')} ({doing})")
 
@@ -1146,6 +1251,8 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                     replies.put({"npc": npc, "seq": seq, "line": "", "steps": []})
                 return
             reply = {k: ai[k] for k in ("emotion", "intensity", "steps", "lines", "line")}
+            if "output_language" in ai:
+                reply["output_language"] = ai["output_language"]
             # The world uses the live pose when it starts a movement step, including getting up.
             reply.update(heard=text, stt_ms=round(stt_ms), ai_ms=ai["ai_ms"], seq=seq, npc=npc)
             err = ai.get("error", "")
@@ -1158,7 +1265,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                      f"{st.npc_name()} ({ai['ai_ms'] / 1000:.1f}초, {reply['emotion']}): {reply['line']}"))
             if kept.get("impression"):
                 log("IMPRESSION", f"seq={seq}\t{speaker}\t{kept['impression']}",
-                    say=f"  └ {speaker}에 대한 인상을 고쳐 씀: {kept['impression']}")
+                    say=f"  └ {st.player_label(speaker)}에 대한 인상을 고쳐 씀: {kept['impression']}")
             if kept.get("memory_note"):
                 log("MEMORY", f"seq={seq}\t{kept['memory_note']}", say=f"  └ 기억에 기록함: {kept['memory_note']}")
         elif by_voice and not text:
@@ -1234,9 +1341,12 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                         if not was_active and (det.active or finished):
                             turn["speech_epoch"] += 1
                             utterance_started = time.monotonic() - VAD_ONSET_VOICED * VAD_FRAME_S
+                            if utterance_dictate is None:
+                                replies.status("hearing", utterance_tail, utterance_npc,
+                                               utterance_epoch, utterance_speaker)
                         for audio, speech_s in finished:
                             if speech_s < VAD_MIN_SPEECH_S:
-                                blips.append(speech_s)
+                                blips.append((speech_s, det.floor, det.onset_threshold))
                                 continue
                             if (utterance_dictate is None and
                                     (utterance_tail is None or not utterance_tail.npc_state[utterance_npc]
@@ -1246,17 +1356,18 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                             _seq += 1
                             turn["pending"] += 1
                             ended = time.monotonic() - det.trailing_silence
-                            log("VAD_END", f"seq={_seq}\tspeech_s={speech_s:.2f}\tclip_s={audio.size / det.rate:.2f}",
+                            log("VAD_END", f"seq={_seq}\tspeech_s={speech_s:.2f}\tclip_s={audio.size / det.rate:.2f}"
+                                f"\tfloor_end={det.floor:.4f}\tonset_threshold_end={det.onset_threshold:.4f}",
                                 say="말 끝남, 글자로 바꾸는 중...")
                             work.put(Utterance(_seq, now_ms(), -1.0, to_16k(audio, det.rate), utterance_npc, True,
                                               utterance_tail, utterance_epoch, utterance_speaker, utterance_dictate,
-                                              utterance_started, ended))
+                                              utterance_started, ended, vad_speech_s=speech_s))
                             det.reset()
                             break
                     context = (utterance_tail, utterance_npc, utterance_epoch, utterance_speaker)
                     turn["gaze_active"] = (context, utterance_started, utterance_dictate) if det.active else None
-                for speech_s in blips:
-                    log("VAD_BLIP", f"speech_s={speech_s:.2f}")
+                for speech_s, floor, threshold in blips:
+                    log("VAD_BLIP", f"speech_s={speech_s:.2f}\tfloor_end={floor:.4f}\tonset_threshold_end={threshold:.4f}")
             if not want and not det.active:
                 rec.close_tap()
                 tap = None
@@ -1365,7 +1476,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                 st = store.for_npc(npc)
                 phrase = st.add_affection(who, kind)
                 log("AFFECTION", f"type={kind}\tnpc={npc}\tby={who}\tnoted={int(bool(phrase))}",
-                    say=f"  └ {st.npc_name()}: {who}에 대한 인상에 기록함: {phrase}" if phrase else "")
+                    say=f"  └ {st.npc_name()}: {st.player_label(who)}에 대한 인상에 기록함: {phrase}" if phrase else "")
             return
         if event == "NPC_POSE":
             m = POSE_RE.search(line)
@@ -1400,6 +1511,8 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                 turn["npc_epoch"] = tail.npc_epoch[npc]
                 turn["path"] = tail.path
                 turn["down_at"] = time.monotonic()
+                if bridge.dictate_target() is None:
+                    replies.status("hearing", tail, npc, turn["npc_epoch"], speaker_of(tail))
             rec.start()
             log("PTT_DOWN", line.strip()[-80:], say="녹음 시작")
         else:
@@ -1480,6 +1593,8 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
         if not busy:
             time.sleep(0.01)
     for tail in tails.values():
+        with state_lock:
+            invalidate_search(tail)
         tail.close()
 
 

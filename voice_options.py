@@ -10,6 +10,15 @@ DEFAULT_MODEL = MODELS["haiku"]
 MAX_HINTS = 32
 MAX_HINT_CHARS = 80
 MAX_HINT_TEXT = 2048
+STT_VOCABULARY = (
+    "권준", "kwonjun", "이토아", "ITOAR", "앉아", "일어나", "따라와", "멈춰", "이리 와",
+    "TV 켜", "TV 꺼", "백라이트", "거울", "거울 켜", "거울 꺼",
+)
+
+
+def whisper_beam_size(value):
+    # Omit beam_size for the greedy decoder. Whisper uses beam search even at beam_size=1.
+    return 5 if str(value).strip() == "5" else None
 
 # USD per million tokens, <=100K prompt tokens, 5-minute cache. Checked 2026-11-19:
 # https://platform.claude.com/docs/en/build-with-claude/prompt-caching
@@ -92,7 +101,8 @@ def clean_hints(value):
 
 def hint_prompt(pairs):
     # Vocabulary, not instructions to Whisper. Each utterance gets its own NPC's snapshot.
-    words = dict.fromkeys(word for pair in pairs for word in pair)
+    words = dict.fromkeys(STT_VOCABULARY)
+    words.update(dict.fromkeys(word for pair in pairs for word in pair))
     return ", ".join(words)
 
 

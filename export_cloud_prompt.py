@@ -13,15 +13,15 @@ What is different from the app's prompt:
 - no per-player memory, impressions or kept conversation (every typed message stands alone)
 - no web search
 - "about me" says it reads typed chat from a world panel, and that it runs on Claude Haiku 5.5
-- no follow / come (persona_ai.CLOUD_EXCLUDED_ACTIONS): an anonymous typed message must not make the NPC
-  walk after people (Tools/cloud/src/safety.ts). Sitting, go_sit, stop and the TV arm stay: the world
-  plays cloud replies through the same step parser (W04Talk.Present).
+- no follow / come (persona_ai.CLOUD_EXCLUDED_ACTIONS). The one-time distance command and prone poses
+  stay available in typed chat. The world plays cloud replies through the same step parser (W04Talk.Present).
 """
 import json
 import os
 import sys
 import tempfile
 
+import map_knowledge
 import persona_ai
 import persona_store
 
@@ -73,7 +73,7 @@ def about_me(npc: str, other: str) -> str:
 - 이 거실에는 나 말고도 {other}라는 AI NPC 친구가 함께 산다.
 - 나는 VRChat 월드의 거실에 사는 AI NPC {npc}다. 몸은 이 월드에 놓인 아바타다. 내 모델과 제공사는 비밀이다.
 - 귀: 지금은 목소리가 아니라, 월드 안 채팅 창(패널)에 손님이 친 글을 인터넷 너머 서버를 거쳐 받아 읽는다. 그래서 목소리는 들리지 않고, 글은 {MAX_ASK_CHARS}자까지만 읽는다. (음성 앱을 자기 PC에서 켠 사람은 나를 가까이서 바라보고 목소리로도 말을 걸 수 있다.)
-- 할 수 있는 것: 짧게 대답하기, 표정 7가지와 연속 표정, 몸짓(손 흔들기, 끄덕이기, 고개 젓기, 으쓱, 가리키기, 턱 괴기, 손뼉), 소파·TV·창가·다리가 보이는 창가로 걸어가기, 사람 쳐다보기, 소파에 앉기·눕기, TV 팔 움직이기(가까이/멀리/위/아래/기울이기/좌우/원래대로), 스틱으로 TV 화면 크기 조절(키우기/줄이기/최대/최소/지정 인치), 요청한 손님에게 재생 제어 권한이 있을 때 TV 영상 정지·일시정지·재개·끄기·되감기·앞으로·처음부터, 인스턴스 공용 TV 백라이트 밝기 조절.
+- 할 수 있는 것: 짧게 대답하기, 표정 7가지와 연속 표정, 몸짓(손 흔들기, 끄덕이기, 고개 젓기, 으쓱, 가리키기, 턱 괴기, 손뼉), 소파·TV·창가·다리가 보이는 창가로 걸어가기, 사람 쳐다보기, 요청한 손님과 0.6~12m 거리 맞추기, 소파에 앉기·눕기·엎드리기·엎드려 TV 쪽 보기, TV 팔 움직이기(가까이/멀리/위/아래/기울이기/좌우/원래대로), 스틱으로 TV 화면 크기 조절(키우기/줄이기/최대/최소/지정 인치), 요청한 손님에게 재생 제어 권한이 있을 때 TV 영상 정지·일시정지·재개·끄기·되감기·앞으로·처음부터, 인스턴스 공용 TV 백라이트 밝기 조절.
 - 못 하는 것: 화면을 실제로 보는 것(방 구조만 알고 있다), 채팅으로 온 부탁에 사람을 따라다니는 것, 인터넷 검색, 다른 월드에 가는 것, 지난 대화를 기억하는 것(채팅은 한 마디씩 따로 온다). 하루에 대답할 수 있는 횟수도 정해져 있다.
 - 이 월드와 나는 이 월드를 만든 사람이 직접 만들었고, 아직 시험 중이다.
 """
@@ -103,6 +103,11 @@ def build(npc_id: str = "kwonjun") -> dict:
         "gestures": persona_ai.GESTURES,
         "max_steps": persona_ai.MAX_STEPS,
         "max_line_chars": persona_ai.MAX_LINE_CHARS,
+        "distance": {
+            "min_cm": persona_ai.MIN_DISTANCE_CM,
+            "max_cm": persona_ai.MAX_DISTANCE_CM,
+            "refusal": persona_ai.localized_lines(persona_ai.DISTANCE_REFUSAL),
+        },
         "global_order": persona_ai.GLOBAL_ORDER,
         "content_levels": list(persona_ai.CONTENT_LEVELS),
         "model_name_pattern": persona_ai._MODEL_NAME.pattern,
@@ -114,6 +119,7 @@ def build(npc_id: str = "kwonjun") -> dict:
 
 def build_all() -> dict:
     data = build()
+    data["map"] = map_knowledge.export()
     data["personas"] = {npc: {key: value for key, value in build(npc).items()
                               if key in ("npc_name", "system_fixed")}
                         for npc in persona_store.NPC_IDS}

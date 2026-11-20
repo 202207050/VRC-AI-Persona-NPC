@@ -353,6 +353,10 @@ def watcher_checks(tmp):
         # ---- normal push-to-talk still goes to the AI
         tr.text = "안녕 반가워"
         add(log_a, PTT)
+        for state in ("hearing", "thinking"):
+            status, raw = get(port, "/poll")
+            ok(status == 200 and json.loads(raw) == {"state": state, "speaker": "Tester One"},
+               f"push-to-talk sends {state} before the reply")
         status, raw = get(port, "/poll")
         ok(json.loads(raw)["line"] == "응!" and brain.heard == ["안녕 반가워"], "normal turn: AI answers")
 
@@ -382,6 +386,8 @@ def watcher_checks(tmp):
         get(port, "/poll")
         ok(store.players["Tester One"]["note"] == "다정하고 말이 많다" and len(brain.heard) == 1, "impression dictated")
         add(log_a, PTT)
+        for state in ("hearing", "thinking"):
+            ok(json.loads(get(port, "/poll")[1])["state"] == state, "the turn after dictation reports progress")
         ok(json.loads(get(port, "/poll")[1])["line"] == "응!" and len(brain.heard) == 2, "the turn after goes to the AI again")
 
         # ---- half-written line, then the rest

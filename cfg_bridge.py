@@ -171,6 +171,9 @@ class CfgBridge:
         text = req.get("text")
         n = len(text) if isinstance(text, str) else 0
         st = self.store
+        player = req.get("player")
+        if op in ("impression", "lock", "dictate") and player == self._panel_speaker(st.npc_name()):
+            player = st.speaker
         what, detail = "", f"op={op[:20]}\tlen={n}"
         if op == "load":
             self._shared["npc"] = st.npc
@@ -184,10 +187,10 @@ class CfgBridge:
         elif op == "name":
             err, what = st.set_npc_name(text), "NPC 이름을 고침"
         elif op == "impression":
-            err, what = st.set_impression(req.get("player"), text), f"플레이어 인상을 고침 ({min(n, persona_store.MAX_IMPRESSION_CHARS)}자)"
+            err, what = st.set_impression(player, text), f"플레이어 인상을 고침 ({min(n, persona_store.MAX_IMPRESSION_CHARS)}자)"
         elif op == "lock":
             on = _flag(req.get("on"))
-            err, what = st.set_locked(req.get("player"), on), "플레이어 인상을 " + ("잠금" if on else "잠금 풂")
+            err, what = st.set_locked(player, on), "플레이어 인상을 " + ("잠금" if on else "잠금 풂")
             detail += f"\ton={int(on)}"
         elif op == "note_add":
             err, what = st.add_note(text), f"기억 메모를 더함 ({min(n, persona_store.MAX_NOTE_CHARS)}자)"
@@ -252,9 +255,8 @@ class CfgBridge:
             elif target not in DICTATE_TARGETS:
                 err = "알 수 없는 받아쓰기 대상입니다."
             else:
-                player = ""
-                if target == "impression":
-                    player = persona_store._one_line(req.get("player"), persona_store.MAX_NAME_CHARS) or st.speaker
+                player = (persona_store._one_line(player, persona_store.MAX_NAME_CHARS) or st.speaker
+                          if target == "impression" else "")
                 with self.cond:
                     self.dictate = {"target": target, "player": player, "until": self.clock() + DICTATE_S,
                                     "source": source, "npc": st.npc}
@@ -299,6 +301,10 @@ class CfgBridge:
 
     # ------------------------------------------------------------ app -> world
 
+    def _panel_speaker(self, npc_name: str) -> str:
+        st = self.store
+        return st.player_label(st.speaker) if st.speaker.casefold() == npc_name.casefold() else st.speaker
+
     def payload(self, npc=None) -> bytes:
         """The /cfg answer (the caller checks is_open() first)."""
         selected = persona_store.npc_id(npc if npc is not None else self._shared["npc"])
@@ -311,10 +317,13 @@ class CfgBridge:
         if d and d.get("npc", "kwonjun") != st.npc:
             d = None
         with st.lock:
+            npc_name = st.npc_name()
+            speaker_label = self._panel_speaker(npc_name)
             players = [{"name": k, "note": v["note"], "locked": bool(v["locked"])} for k, v in st.players.items()]
             if st.speaker not in st.players:                    # so the panel can always edit "me"
                 players.append({"name": st.speaker, "note": "", "locked": False})
             players.sort(key=lambda p: p["name"] != st.speaker)   # the speaker first
+            players[0]["name"] = speaker_label
             history = []
             for m in st.history:
                 said = m["content"]
@@ -326,7 +335,7 @@ class CfgBridge:
                 history.append({"who": "user" if m["role"] == "user" else "npc", "text": str(said)})
             body = {
                 "ok": True, "rev": 0,
-                "npc": st.npc_name(), "speaker": st.speaker, "persona": st.persona_text(),
+                "npc": npc_name, "speaker": speaker_label, "persona": st.persona_text(),
                 "auto": bool(st.settings["auto_update"]), "keep_history": bool(st.settings["keep_history"]),
                 "smalltalk": smalltalk,
                 "players": players, "notes": [n["text"] for n in st.notes],

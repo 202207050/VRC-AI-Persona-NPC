@@ -260,7 +260,7 @@ test('compaction shows last time and sizes, validates thresholds, runs and undoe
   const t = await setup({ modern: true });
   const status = t.get('compactStatus').textContent;
   for (const piece of ['지금: 메모 21개 1,480자', '마지막 정리: 2026-11-19 20:10', '메모 52개 3,120자 → 메모 21개 1,480자',
-                       'Alice의 인상 450자 → 190자', '$0.0014', '되돌릴 수 있는 정리 기록 1개'])
+                       'Alice(나)의 인상 450자 → 190자', '$0.0014', '되돌릴 수 있는 정리 기록 1개'])
     assert.ok(status.includes(piece), piece + ' / ' + status);
   assert.equal(t.get('compactCount').value, '50');
   assert.equal(t.get('compactChars').value, '3000');

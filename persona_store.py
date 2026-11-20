@@ -43,6 +43,7 @@ def npc_id(value=None):
 AFFECTION_PHRASES = {"pat": "내 머리를 쓰다듬어 준 적이 있음.", "hug": "나를 안아 준 적이 있음.",
                      "wave": "나에게 손을 흔들어 인사해 준 적이 있음."}
 AFFECTION_INTERVAL_S = 600        # at most one note per player per type in this long
+TOUCH_AFFECTION = ("pat", "hug")  # each is recorded at most once per saved impression
 
 DEFAULT_SPEAKER = "플레이어"     # used until the VRChat log tells us the local player's name
 
@@ -312,8 +313,15 @@ class Store:
             talks = max(0, int(p.get("talks", 0)))
         except (TypeError, ValueError):
             talks = 0
-        return {"note": _one_line(p.get("note"), MAX_IMPRESSION_CHARS), "locked": bool(p.get("locked")),
-                "updated": _one_line(p.get("updated"), 20), "talks": talks}
+        note = _one_line(p.get("note"), MAX_IMPRESSION_CHARS)
+        recorded = p.get("touch_recorded")
+        touch = [kind for kind in TOUCH_AFFECTION if AFFECTION_PHRASES[kind] in note
+                 or (isinstance(recorded, list) and kind in recorded)]
+        player = {"note": note, "locked": bool(p.get("locked")),
+                  "updated": _one_line(p.get("updated"), 20), "talks": talks}
+        if touch:
+            player["touch_recorded"] = touch
+        return player
 
     @staticmethod
     def _clean_note(n):
@@ -457,6 +465,9 @@ class Store:
         with self.lock:
             return dict(self.players.get(name) or {"note": "", "locked": False, "updated": "", "talks": 0})
 
+    def player_label(self, name: str) -> str:
+        return f"{name}(나)" if self.speaker_known and name == self.speaker else name
+
     def _append_exchange(self, user: dict, assistant_json: str) -> None:
         self.history += [user, {"role": "assistant", "content": assistant_json}]
         self.history = self.history[-2 * MAX_HISTORY:]
@@ -505,8 +516,8 @@ class Store:
     def add_affection(self, name: str, kind: str, now: float = None) -> str:
         """The world logged that `name` patted / hugged / waved at this NPC: add a short phrase to this
         NPC's impression of that player. Returns the phrase when it was written, else ''.
-        Like the AI's own notes it needs "auto_update" on and the player's impression unlocked. At most
-        one note per player and type in AFFECTION_INTERVAL_S; a phrase already in the note is not repeated."""
+        Like the AI's own notes it needs "auto_update" on and the player's impression unlocked.
+        Touch is recorded once per type even if the impression is later summarized."""
         phrase = AFFECTION_PHRASES.get(kind)
         name = _one_line(name, MAX_NAME_CHARS)
         if not phrase or not name:
@@ -522,6 +533,9 @@ class Store:
                 p = {"note": "", "locked": False, "updated": "", "talks": 0}
             if p["locked"]:
                 return ""
+            recorded = p.get("touch_recorded", [])
+            if kind in recorded:
+                return ""
             last = self._affection_at.get((name, kind))
             if last is not None and 0 <= now - last < AFFECTION_INTERVAL_S:
                 return ""
@@ -530,6 +544,8 @@ class Store:
             if phrase in p["note"] or len(note) > MAX_IMPRESSION_CHARS:
                 return ""
             p["note"], p["updated"] = note, _stamp()
+            if kind in TOUCH_AFFECTION:
+                p["touch_recorded"] = [*recorded, kind]
             self.players[name] = p
             self._save_players()
             return phrase
@@ -575,7 +591,8 @@ class Store:
                                  "그 안에 답이 있을 것 같으면 recall로 전부 되짚어 본다.)")
                 lines.append("")
             lines.append("## 지금 말을 건 사람")
-            lines.append(f"- 이름: {speaker}" if self.speaker_known or speaker != DEFAULT_SPEAKER else "- 이름은 아직 모른다.")
+            label = self.player_label(speaker)
+            lines.append(f"- 이름: {label}" if self.speaker_known or speaker != DEFAULT_SPEAKER else "- 이름은 아직 모른다.")
             if p["talks"]:
                 lines.append(f"- 지금까지 {p['talks']}번 말을 주고받았다.")
             lines.append(f"- 이 사람에 대한 내 인상: {p['note']}" if p["note"]
@@ -594,7 +611,12 @@ class Store:
                     said = json.loads(said)["lines"]["ko"]
                 except (ValueError, KeyError, TypeError):
                     pass
-                talks.append({"heard": self.history[i]["content"], "line": said})
+                user = self.history[i]
+                talk = {"heard": user["content"], "line": said}
+                speaker = user.get("utterance", {}).get("speaker")
+                if speaker:
+                    talk["speaker_label"] = self.player_label(speaker)
+                talks.append(talk)
             return {
                 "npc_name": self.npc_name(),
                 "persona": self.persona_text(),
@@ -665,7 +687,8 @@ class Store:
                     if not name or not isinstance(p, dict):
                         continue
                     old = self.players.get(name, {})
-                    clean = self._clean_player(dict(p, talks=old.get("talks", 0), updated=old.get("updated", "")))
+                    clean = self._clean_player(dict(p, talks=old.get("talks", 0), updated=old.get("updated", ""),
+                                                    touch_recorded=old.get("touch_recorded", [])))
                     if clean["note"] != old.get("note", ""):
                         clean["updated"] = _stamp()
                     new[name] = clean

@@ -280,7 +280,7 @@ function render(keepPersona) {
   $("modelCosts").replaceChildren(...(S.model_options || []).map(m => el("tr", {},
     el("td", {}, m.name), el("td", {}, "$" + m.cold_usd.toFixed(6)), el("td", {}, "$" + m.warm_usd.toFixed(6)))));
   $("speakerInfo").textContent = S.speaker_known
-    ? "지금 말하는 사람: " + S.speaker + " (VRChat 기록에서 읽은 내 이름)"
+    ? "지금 말하는 사람: " + playerLabel(S.speaker)
     : "아직 VRChat 이름을 못 읽어서 \"" + S.speaker + "\"로 적습니다. VRChat에서 월드에 들어가면 이름이 자동으로 잡힙니다.";
   if (!dirty.players) {
     players = JSON.parse(JSON.stringify(S.players));
@@ -321,7 +321,7 @@ function renderCompaction() {
   if (!last) lines.push("아직 정리한 적이 없습니다.");
   else if (last.ok) {
     let t = "마지막 정리: " + last.at + " · " + sizeText(last.notes_before) + " → " + sizeText(last.notes_after);
-    for (const p of last.impressions) t += " · " + p.name + "의 인상 " + p.before + "자 → " + p.after + "자";
+    for (const p of last.impressions) t += " · " + playerLabel(p.name) + "의 인상 " + p.before + "자 → " + p.after + "자";
     if (last.usage) t += " · 비용 약 $" + last.cost_usd.toFixed(4);
     lines.push(t + (last.undone ? " (" + last.undone + "에 되돌림)" : "") + ".");
   } else lines.push("마지막 시도: " + last.at + " · 바뀐 것 없음 (" + (last.error || "이유 모름") + ").");
@@ -346,6 +346,10 @@ function syncTextFromName() {
   countPersona();
 }
 
+function playerLabel(name) {
+  return S.speaker_known && name === S.speaker ? name + "(나)" : name;
+}
+
 function renderPlayers() {
   const box = $("players");
   box.replaceChildren();
@@ -363,7 +367,7 @@ function renderPlayers() {
     lock.onchange = () => { p.locked = lock.checked; dirty.players = true; };
     const del = el("button", { className: "del" }, "지우기");
     del.onclick = () => { delete players[name]; dirty.players = true; renderPlayers(); };
-    const head = el("div", { className: "head" }, el("span", { className: "name" }, name));
+    const head = el("div", { className: "head" }, el("span", { className: "name" }, playerLabel(name)));
     if (name === S.speaker) head.append(el("span", { className: "tag" }, "지금 말하는 사람"));
     head.append(el("span", { className: "tag" }, "대화 " + (p.talks || 0) + "번"));
     if (p.updated) head.append(el("span", { className: "tag" }, "고친 때 " + p.updated));
@@ -403,7 +407,7 @@ function renderHistory() {
         save({ history_delete: i, history_heard: h.heard }, "그 대화를 잊었습니다.");
     };
     box.append(el("div", { className: "talk" },
-      el("div", {}, el("div", { className: "who" }, "나"), el("div", {}, h.heard),
+      el("div", {}, el("div", { className: "who" }, h.speaker_label || "나"), el("div", {}, h.heard),
                     el("div", { className: "who" }, S.npc_name), el("div", {}, h.line)), del));
   });
 }

@@ -155,8 +155,8 @@ def detector_checks(tmp):
     ok(len(out) == 2, "a 1.5 s pause splits two utterances")
 
     # ---- a blip is reported as too short (the caller drops it); silence gives nothing
-    out, _ = run(np.concatenate([room(0.6), speech(0.2), room(1.4)]))
-    ok(all(s < app.VAD_MIN_SPEECH_S for _, s in out), "a 0.2 s blip is under the minimum")
+    out, _ = run(np.concatenate([room(0.6), speech(0.15), room(1.4)]))
+    ok(all(s < app.VAD_MIN_SPEECH_S for _, s in out), "a 0.15 s blip is under the minimum")
     ok(run(room(5.0))[0] == [], "a quiet room gives nothing")
     ok(run(np.zeros(app.RATE * 3, np.float32))[0] == [], "digital silence gives nothing")
 
@@ -258,7 +258,7 @@ def gaze_checks(tmp):
         ok(no_reply() and mic.tap is not None, "still listening, nothing more said")
 
         # ---- a blip is ignored
-        mic.push(np.concatenate([speech(0.2), room(1.4)]))
+        mic.push(np.concatenate([speech(0.15), room(1.4)]))
         wait_for(lambda: tsv("VAD_BLIP"), "blip seen")
         ok(no_reply() and len(tr.clips) == 1 and len(brain.heard) == 1, "a blip is not sent to Whisper or the AI")
 

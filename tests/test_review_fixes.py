@@ -173,8 +173,8 @@ def affection_store_checks(tmp):
     ok(itoa.add_affection("Alice", "pat", now=t0 + 601) == "" and itoa.players["Alice"]["note"].count(pat) == 1,
        "after 10 minutes the same phrase is still not repeated")
     itoa.set_impression("Alice", "귤을 좋아함.")
-    ok(itoa.add_affection("Alice", "pat", now=t0 + 1300) == pat and itoa.players["Alice"]["note"] == "귤을 좋아함. " + pat,
-       "it is appended to an existing impression")
+    ok(itoa.add_affection("Alice", "pat", now=t0 + 1300) == "" and itoa.players["Alice"]["note"] == "귤을 좋아함.",
+       "the recorded pat stays deduplicated after the impression is edited")
     ok(itoa.add_affection("Alice", "kiss", now=t0) == "" and itoa.add_affection("", "pat", now=t0) == "",
        "unknown type / empty name: nothing")
     itoa.set_locked("Carol", True)
