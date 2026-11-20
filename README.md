@@ -10,6 +10,23 @@ VRChat 월드의 NPC에 AI 인격을 붙이는 PC 앱입니다. NPC를 가까이
 
 > **지금 상태 (2026-11):** 시험 단계입니다. 이 앱은 아래 "월드 쪽 규칙"을 지키는 VRChat 월드에서만 동작합니다. 예제 월드는 아직 공개 전입니다.
 
+
+## 처음 하는 분은 여기만 보세요 (약 10분)
+
+1. **API 키 만들기** — [console.anthropic.com](https://console.anthropic.com)에 가입하고 결제 수단을 등록한 뒤 **API Keys → Create Key**를 누릅니다. `sk-ant-`로 시작하는 키를 복사해 둡니다. (기본 모델 기준 대답 1번에 1원 이하, 검색하면 약 17원. 아래 "비용" 참고)
+2. **받기** — 이 페이지 위쪽 초록색 **Code → Download ZIP**을 누르고, 받은 ZIP을 오른쪽 클릭 → **압축 풀기**로 원하는 폴더에 풉니다.
+3. **설치** — 푼 폴더의 **`setup.cmd`를 더블클릭**합니다.
+   - 파이썬이 없으면 "자동으로 설치할까요?"가 나옵니다. **Y**를 누르고, 끝나면 `setup.cmd`를 한 번 더 더블클릭하세요.
+   - "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누릅니다.
+   - 몇 분 뒤 **API 키를 물어보면** 1번에서 복사한 키를 붙여 넣고(창에서 마우스 오른쪽 클릭) Enter.
+   - 바탕화면 바로가기를 만들지 물으면 **Y**. 바로 켤지 물으면 **Y**.
+4. **VRChat 설정** — VRChat 설정에서 **"Allow Untrusted URLs"를 켭니다**(메뉴 위치는 버전마다 달라서, 설정 창의 검색에 "Untrusted"를 쳐서 찾는 게 빠릅니다). 이게 꺼져 있으면 NPC가 대답하지 못합니다. Public 인스턴스에서는 이 설정이 막힐 수 있으니 Friends+나 Invite 인스턴스를 쓰세요.
+5. **대화하기** — 이 앱을 지원하는 월드(W04)에 들어가서 NPC에게 가까이 가 화면 가운데에 두고 그냥 말합니다.
+
+다음부터는 **바탕화면의 `VRC AI NPC`만 더블클릭**하면 됩니다. 처음 켤 때 한 번 음성 인식 모델(약 1.6 GB)을 받느라 몇 분 걸립니다. 끌 때는 앱 창을 닫습니다.
+
+> **First time? (EN)** Get an API key at console.anthropic.com → Download ZIP and unzip → double-click `setup.cmd` (it installs Python if missing, asks for your key, and makes a desktop shortcut) → enable **Allow Untrusted URLs** in VRChat → join the world and talk to the NPC.
+
 ---
 
 ## 어떻게 동작하나요
@@ -37,7 +54,7 @@ NPC가 말함 ◀──── 기다리던 요청에 답 ──
 | 무엇 | 설명 |
 |---|---|
 | Windows 10/11 + VRChat(PC) | 데스크톱과 PC VR 모두 됩니다. |
-| Python 3.10 이상 | [python.org](https://www.python.org/downloads/)에서 설치합니다. 설치 화면의 "py launcher"를 켜 두세요. |
+| Python 3.10 이상 | 없으면 `setup.cmd`가 자동 설치를 제안합니다(winget). 직접 설치한다면 [python.org](https://www.python.org/downloads/)에서 받고 "py launcher"를 켜 두세요. |
 | NVIDIA 그래픽카드 (권장) | RTX 20 시리즈 이상을 권장합니다. 없으면 CPU로 동작하지만 글자 변환이 몇 초 걸립니다. |
 | Claude API 키 (유료) | [Claude Console](https://console.anthropic.com)에서 만듭니다. 사용한 만큼 돈이 나갑니다(아래 "비용" 참고). |
 | 디스크 약 5 GB | PyTorch 2~3 GB + Whisper 모델 1.6 GB |
@@ -49,7 +66,7 @@ NPC가 말함 ◀──── 기다리던 요청에 답 ──
    - 가상환경(`.venv`)을 만들고 PyTorch와 필요한 패키지를 받습니다. 몇 분 걸립니다.
    - NVIDIA 그래픽카드가 있으면 그래픽카드용 PyTorch를, 없으면 CPU용을 받습니다.
    - GTX 10 시리즈처럼 오래된 그래픽카드는 명령창에서 `setup.cmd cu126`으로 설치하세요.
-3. **API 키 넣기:** 설치가 끝나면 같은 폴더에 `.env` 파일이 생깁니다. 메모장이나 VS Code로 열어서 `ANTHROPIC_API_KEY=` 바로 뒤에 키를 붙여 넣고 저장합니다.
+3. **API 키 넣기:** 설치 마지막에 키를 물어보면 붙여 넣고 Enter를 누르면 같은 폴더의 `.env`에 저장됩니다. 그때 건너뛰었다면 `.env`를 메모장으로 열어 `ANTHROPIC_API_KEY=` 바로 뒤에 키를 붙여 넣고 저장합니다.
    ```
    ANTHROPIC_API_KEY=sk-ant-...
    ```
