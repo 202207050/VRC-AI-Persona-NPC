@@ -33,7 +33,7 @@ because any VRChat world may send GET requests to 127.0.0.1 when "Allow Untruste
 
 In-world settings panel: the world writes "[W04AI] CFG_OPEN" / "[W04AI] CFG_SET {json}" to the log and
 reads GET /cfg (cfg_bridge.py). No token there; instead /cfg answers only for 20 s after CFG_OPEN, and
-[W04AI] lines count only from a log whose current world is allowed (Build & Test, or W04_WORLD_IDS in .env).
+[W04AI] lines count only from a log whose current world is allowed (Build & Test or the combined W04_WORLD_IDS allowlist).
 
 The microphone is kept open while the app runs; only the last 0.5 s stays in memory, and audio is
 looked at (and kept, for the length of one utterance) only while LISTEN is on or jump is held.
@@ -1652,7 +1652,7 @@ def main():
                 say=(f"주의: data/npcs/{npc_key}/{name} 파일을 읽지 못해 빈 상태로 시작합니다. "
                      + (f"원본은 같은 폴더의 {backup}로 복사해 두었습니다." if backup
                         else "원본을 복사하지 못해서 이번 실행에서는 이 파일을 덮어쓰지 않습니다.")))
-    world_ids = cfg_bridge.parse_world_ids(os.environ.get("W04_WORLD_IDS", ""))
+    world_ids = cfg_bridge.load_world_ids(os.environ.get("W04_WORLD_IDS", ""), os.path.join(HERE, ".env.example"))
     bridge = cfg_bridge.CfgBridge(store, world_ids, log=log)
     try:                                        # before the slow Whisper load: a second copy stops at once
         server = make_server(args.port, store, brain, bridge=bridge)
@@ -1675,7 +1675,7 @@ def main():
     threading.Thread(target=watch_log, args=(args.log_dir, rec, tr, args.save_clips, brain, store, bridge),
                      kwargs={"listen_mode": args.listen}, daemon=True).start()
     print(f"월드 연결 대기: http://127.0.0.1:{args.port}/poll  (끄려면 이 창을 닫거나 Ctrl+C)", flush=True)
-    print(f"허용한 월드: Build & Test(로컬 시험) + .env의 W04_WORLD_IDS {len(world_ids)}개. "
+    print(f"허용한 월드 {len(world_ids)}개 (Build & Test 로컬 시험 별도 허용). "
           "다른 월드에서 온 점프 표시와 설정 창 요청은 무시합니다.", flush=True)
     print(f"설정 화면(성격·플레이어 인상·기억 보기/고치기): {server.settings_url}", flush=True)
     print("  └ 이 주소는 켤 때마다 바뀝니다. settings.cmd를 더블클릭해도 열립니다. 주소를 남에게 보여 주지 마세요.", flush=True)

@@ -10,7 +10,7 @@ which the app already reads. So:
 Because any world may GET 127.0.0.1 and may write log lines, both directions are limited:
   * /cfg answers only for WINDOW_S seconds after a CFG_OPEN line;
   * CFG_* lines count only when they come from a log file whose current world is allowed: a local
-    test world (Build & Test, "local:...") or an ID listed in W04_WORLD_IDS in .env.
+    test world (Build & Test, "local:...") or an ID in the combined W04_WORLD_IDS allowlist.
 persona_npc_app.py tracks the world of each log file and calls handle_line() only for new lines, so
 lines written before the app started are never applied again.
 
@@ -44,6 +44,21 @@ LEAVE_RE = re.compile(_STAMP + r"(\[Behaviour\] OnLeftRoom\b|VRCApplication: Han
 def parse_world_ids(text: str) -> set:
     """'wrld_a, wrld_b' (W04_WORLD_IDS) -> {'wrld_a', 'wrld_b'}; anything that is not a world ID is dropped."""
     return {w for w in (p.strip() for p in (text or "").split(",")) if re.fullmatch(r"wrld_[0-9A-Fa-f\-]+", w)}
+
+
+def load_world_ids(configured_ids: str, example_path) -> set:
+    """Combine the effective environment setting with the bundled world IDs."""
+    world_ids = parse_world_ids(configured_ids)
+    try:
+        with open(example_path, encoding="utf-8-sig") as example:
+            for raw in example:
+                key, separator, value = raw.partition("=")
+                if separator and key.strip() == "W04_WORLD_IDS":
+                    world_ids.update(parse_world_ids(value.strip().strip('"').strip("'")))
+                    break
+    except FileNotFoundError:
+        pass
+    return world_ids
 
 
 def world_from_line(line: str, current):

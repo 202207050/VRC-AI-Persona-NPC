@@ -103,6 +103,19 @@ class CountingBrain:
                 "ai_ms": 1, "model": "mock"}
 
 
+def world_allowlist_checks(tmp):
+    example_path = os.path.join(tmp, ".env.example")
+    ok(cfg_bridge.load_world_ids(MINE, example_path) == {MINE}, "missing example keeps configured worlds")
+    with open(example_path, "w", encoding="utf-8-sig") as example:
+        example.write(f'# W04_WORLD_IDS=wrld_bad\nOTHER_KEY=wrld_bad\n W04_WORLD_IDS = "{MINE}, {OTHER}, invalid"\n')
+
+    personal = "wrld_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    ok(cfg_bridge.load_world_ids(f"{MINE},{personal}", example_path) == {MINE, OTHER, personal},
+       "the allowlist combines both sources, filters invalid IDs and counts overlaps once")
+    ok(cfg_bridge.load_world_ids("", example_path) == {MINE, OTHER},
+       "the bundled worlds work without a private setting")
+
+
 def unit_checks(tmp):
     """The bridge alone, with a hand-moved clock."""
     persona = os.path.join(tmp, "persona_unit.md")
@@ -429,6 +442,7 @@ def main():
     tmp = tempfile.mkdtemp(prefix="w04_cfg_test_")
     try:
         app.LOG_PATH = os.path.join(tmp, "voice_log.tsv")        # keep the real log clean
+        world_allowlist_checks(tmp)
         unit_checks(tmp)
         watcher_checks(tmp)
     finally:
