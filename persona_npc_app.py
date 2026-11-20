@@ -49,6 +49,7 @@ import os
 import queue
 import re
 import secrets
+import socket
 import sys
 import threading
 import time
@@ -174,6 +175,18 @@ _file_lock = threading.Lock()
 
 def now_ms() -> float:
     return time.time() * 1000.0
+
+
+def ai_error_hint(err: str) -> str:
+    """A plain Korean next step for the AI errors a first-time user can fix alone."""
+    if "AuthenticationError" in err or "invalid x-api-key" in err:
+        return ("\n  → API 키가 틀렸습니다. setup.cmd를 다시 실행해 키를 새로 붙여 넣거나, .env의 ANTHROPIC_API_KEY= 줄을 "
+                "확인하세요(앞뒤 띄어쓰기·따옴표 없이 sk-ant-로 시작하는 키 전체). 고친 뒤 이 창을 닫고 다시 켜세요.")
+    if "credit balance" in err or "billing" in err.lower():
+        return "\n  → API 크레딧이 없습니다. console.anthropic.com의 Billing에서 충전한 뒤 다시 말해 보세요."
+    if "PermissionDenied" in err:
+        return "\n  → 이 키로는 쓸 수 없는 모델입니다. Console에서 키의 권한(워크스페이스)을 확인하세요."
+    return ""
 
 
 def log(kind: str, detail: str = "", say: str = "") -> None:
@@ -760,9 +773,21 @@ class Handler(BaseHTTPRequestHandler):
         self._send(self._state_json(npc), ctype="application/json")
 
 
+class ExclusiveServer(ThreadingHTTPServer):
+    """Refuses a port another app already holds. Python's default (SO_REUSEADDR) lets a second copy
+    of this app share the port on Windows, so two apps heard the same voice and both answered."""
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):          # Windows only
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def make_server(port: int, store, brain=None, token: str = None, bridge=None) -> ThreadingHTTPServer:
-    """The one HTTP server (127.0.0.1 only): /poll and /cfg for the world, /settings for the user."""
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    """The one HTTP server (127.0.0.1 only): /poll and /cfg for the world, /settings for the user.
+    Raises OSError when the port is taken (usually: this app is already running)."""
+    server = ExclusiveServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     server.store, server.brain, server.bridge = store, brain, bridge
     server.token = token or secrets.token_urlsafe(24)
@@ -1129,7 +1154,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                 log("RECALL", f"seq={seq}\trecall_ms={ai.get('recall_ms', 0)}")
             log("AI", f"seq={seq}\tmodel={ai['model']}\tai_ms={ai['ai_ms']}\t{ai.get('usage', '')}\t{err}\t"
                       f"{reply['emotion']}\t{json.dumps(reply['steps'], ensure_ascii=False)}\t{reply['line']}",
-                say=(f"AI 오류 ({err})" if err else
+                say=(f"AI 오류 ({err})" + ai_error_hint(err) if err else
                      f"{st.npc_name()} ({ai['ai_ms'] / 1000:.1f}초, {reply['emotion']}): {reply['line']}"))
             if kept.get("impression"):
                 log("IMPRESSION", f"seq={seq}\t{speaker}\t{kept['impression']}",
@@ -1514,6 +1539,14 @@ def main():
                         else "원본을 복사하지 못해서 이번 실행에서는 이 파일을 덮어쓰지 않습니다.")))
     world_ids = cfg_bridge.parse_world_ids(os.environ.get("W04_WORLD_IDS", ""))
     bridge = cfg_bridge.CfgBridge(store, world_ids, log=log)
+    try:                                        # before the slow Whisper load: a second copy stops at once
+        server = make_server(args.port, store, brain, bridge=bridge)
+    except OSError:
+        log("ALREADY_RUNNING", f"port={args.port}",
+            say=f"이 앱이 이미 켜져 있습니다(포트 {args.port} 사용 중). 같은 앱을 두 개 켜면 한 번 말해도 "
+                "대답이 두 번 나옵니다. 이미 켜진 검은 창을 쓰거나, 그 창을 닫고 다시 켜 주세요. "
+                "/ This app is already running.")
+        sys.exit(1)
     print("Whisper 모델을 불러오는 중... (처음 몇 초 걸림)", flush=True)
     tr = Transcriber(args.model)
     rec = WavRecorder(args.wav) if args.wav else Recorder(args.device)
@@ -1526,7 +1559,6 @@ def main():
             f"불러오기 {tr.load_ms / 1000:.1f}초")
     threading.Thread(target=watch_log, args=(args.log_dir, rec, tr, args.save_clips, brain, store, bridge),
                      kwargs={"listen_mode": args.listen}, daemon=True).start()
-    server = make_server(args.port, store, brain, bridge=bridge)
     print(f"월드 연결 대기: http://127.0.0.1:{args.port}/poll  (끄려면 이 창을 닫거나 Ctrl+C)", flush=True)
     print(f"허용한 월드: Build & Test(로컬 시험) + .env의 W04_WORLD_IDS {len(world_ids)}개. "
           "다른 월드에서 온 점프 표시와 설정 창 요청은 무시합니다.", flush=True)
