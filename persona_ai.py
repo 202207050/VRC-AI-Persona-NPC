@@ -36,6 +36,7 @@ TV_ACTIONS = ["tv_closer", "tv_farther", "tv_lower", "tv_raise", "tv_tilt_down",
               "tv_size_up", "tv_size_down", "tv_size_max", "tv_size_min", "tv_size_set"]
 ACTIONS = BASE_ACTIONS + POSE_ACTIONS + COMMAND_ACTIONS + TV_ACTIONS + ["emote"]
 TARGETS = ["speaker", "sofa", "tv", "window", "bridge_view", "none"]
+GO_SIT_TARGETS = ["none", "other", "long", "single"]
 TARGET_ALIASES = {"door": "bridge_view"}    # the old name of that place; still accepted from the model
 POSES = ("stand", "sit", "lie")             # the world's "[W04AI] NPC_POSE npc=<id> pose=<pose>" log
 GESTURES = ["none", "wave", "nod", "shake_head", "shrug", "point", "think", "clap"]
@@ -256,7 +257,7 @@ REPLY_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "do": {"type": "string", "enum": ACTIONS},
-                    "target": {"type": "string", "enum": TARGETS},
+                    "target": {"type": "string", "enum": TARGETS + GO_SIT_TARGETS[1:]},
                     "gesture": {"type": "string", "enum": GESTURES},
                     "emotion": {"type": "string", "enum": EMOTIONS},
                     "duration": {"type": "number"},
@@ -309,7 +310,7 @@ RULES = f"""너는 VRChat 월드에 있는 NPC다. 아래 성격 설정대로 �
   - keep_distance: 말한 사람과의 목표 거리를 한 번 맞춘다. "2m로 와봐"는 action: "200", "1미터 떨어져"는 action: "100", "더 가까이 와"처럼 숫자가 없으면 action: "{MIN_DISTANCE_CM}"이다. 미터나 센티미터로 말한 거리(예: "일 미터", "육십 센티")를 단위 없는 정수 센티미터 문자열로 쓴다. 요청값이 0.6m 미만이거나 12m를 초과하면 반올림하거나 범위에 끼워 맞추지 말고 steps를 비우고 "0.6m에서 12m 사이 거리만 맞출 수 있어."라고 답한다.
   - 거리와 엎드리기 요청은 "그 거리로 움직여 볼게", "소파에 엎드려 볼게"처럼 짧게 받아들인다. 이미 도착했거나 자세를 바꿨다고 말하지 않는다.
   - stop: "멈춰/그만 따라와/거기 있어"에 쓴다. 따라오기, 걷기, 소파로 이동하기, TV 조작을 중단한다.
-  - go_sit: "앉아 있어/소파 가서 앉아"에 쓴다. 소파로 가서 앉는다.
+  - go_sit: "앉아 있어/소파 가서 앉아"에 쓴다. "다른 소파/다른 쪽/지금 자리 말고" 앉으라고 하면 target은 "other", "1인 소파/혼자 앉는 소파"는 "single", "긴 소파/눕는 소파"는 "long", 자리 지정이 없으면 "none"이다. 자리 지정이 있는 앉기 요청은 go_sit으로 표현한다. other·single·long은 go_sit에만 쓰고 gesture는 "none"으로 둔다.
   - tv_closer/tv_farther(앞으로 당기기/벽 쪽으로), tv_raise/tv_lower(위/아래), tv_tilt_up/tv_tilt_down(세우기/숙이기), tv_left/tv_right(보는 사람 기준 왼쪽/오른쪽으로 돌리기), tv_reset(원래대로): TV 위치나 각도를 조절하는 동작이다. "크게 보이게/앞으로 당겨 줘"는 tv_closer, "최대로/끝까지 당겨 줘"는 tv_closer_max, "끝까지 밀어 줘/벽 쪽으로 최대한"은 tv_farther_max를 쓴다. 위치 조절 중 "끝까지"만 들으면 최근 요청 방향을 따른다.
   - tv_size_up/tv_size_down: "화면 키워/줄여", "TV 크게/작게"에 쓴다. 크기를 한 번에 10인치 조절한다. "화면 최대/최소"나 TV 화면을 두고 "최대/최소"라고 하면 tv_size_max/tv_size_min, "180인치로"처럼 화면 크기를 지정하면 tv_size_set에 숫자 inches: 180을 넣는다. 스틱에서 미리 본 다음 적용하고 방에 맞는지는 월드가 알려 준다.
   - tv_stop: “영상 재생 정지”, tv_pause: “영상 잠깐 멈춰”, tv_off: “영상 꺼 줘”, “화면 비워”. 일반 stop은 NPC의 동작을 멈춘다.
@@ -317,7 +318,7 @@ RULES = f"""너는 VRChat 월드에 있는 NPC다. 아래 성격 설정대로 �
   - tv_restart: “영상 처음부터”, tv_resume: “영상 이어서/다시 재생”.
   - tv_backlight: “백라이트 35%”는 percent: 35를 넣고, 밝게/어둡게/켜기/끄기는 action을 각각 brighter/dimmer/on/off로 넣는다. 화면 크기나 영상 재생과 구분한다.
   - TV 명령은 대답당 하나를 마지막에 넣고 짧게 요청을 받아들인다. 실제 성공 여부는 월드가 알려 준다.
-  - 자세·거리·따라가기·중단·TV 명령은 target과 gesture를 "none"으로 둔다. TV 명령을 move_to와 섞지 않는다.
+  - go_sit 외의 자세·거리·따라가기·중단·TV 명령은 target과 gesture를 "none"으로 둔다. TV 명령을 move_to와 섞지 않는다.
 """
 # Cloud relay (export_cloud_prompt.py): reserve follow and come for the voice app.
 CLOUD_EXCLUDED_ACTIONS = ("follow", "come")
@@ -437,8 +438,7 @@ def format_numbers(line: str) -> str:
 
 
 def clamp_steps(raw, actions=None) -> list:
-    """Known steps only, at most MAX_STEPS. Pose / command / TV steps carry target and gesture "none";
-    the old target "door" becomes "bridge_view"; only one tv_* step is kept and it goes last."""
+    """Keep known steps, go_sit seat targets and the door alias. Keep at most one TV step, last."""
     return _sanitize_steps(raw, actions) or []
 
 
@@ -461,7 +461,11 @@ def _sanitize_steps(raw, actions=None):
                     "duration": min(10, max(0.5, duration))}
         elif do not in BASE_ACTIONS:
             step = {"do": do, "target": "none", "gesture": "none"}
-            if do == "keep_distance":
+            if do == "go_sit":
+                target = s.get("target")
+                if target in GO_SIT_TARGETS:
+                    step["target"] = target
+            elif do == "keep_distance":
                 cm = s.get("action")
                 if (not isinstance(cm, str) or not re.fullmatch(r"[1-9][0-9]{1,3}", cm)
                         or not MIN_DISTANCE_CM <= int(cm) <= MAX_DISTANCE_CM):

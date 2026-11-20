@@ -18,6 +18,14 @@ from smalltalk import clamp_dialog
 class WorldMotionCommandsTest(unittest.TestCase):
     def test_voice_commands_reach_poll_payload(self):
         cases = (
+            ("다른 소파에 앉아", {"do": "go_sit", "target": "other"}),
+            ("다른 쪽에 앉아", {"do": "go_sit", "target": "other"}),
+            ("지금 자리 말고 앉아", {"do": "go_sit", "target": "other"}),
+            ("1인 소파에 앉아", {"do": "go_sit", "target": "single"}),
+            ("혼자 앉는 소파에 앉아", {"do": "go_sit", "target": "single"}),
+            ("긴 소파에 앉아", {"do": "go_sit", "target": "long"}),
+            ("눕는 소파에 앉아", {"do": "go_sit", "target": "long"}),
+            ("앉아 있어", {"do": "go_sit"}),
             ("2m로 와봐", {"do": "keep_distance", "action": "200"}),
             ("1미터 떨어져", {"do": "keep_distance", "action": "100"}),
             ("더 가까이 와", {"do": "keep_distance", "action": "60"}),
@@ -30,7 +38,7 @@ class WorldMotionCommandsTest(unittest.TestCase):
             brain.client = Mock()
             for heard, command in cases:
                 with self.subTest(heard=heard):
-                    step = dict(command, target="none", gesture="none")
+                    step = {"target": "none", "gesture": "none", **command}
                     data = {"emotion": "neutral", "intensity": 0.5,
                             "steps": [step], "lines": {"ko": "해 볼게."}}
                     brain.client.messages.create.return_value = SimpleNamespace(
@@ -44,8 +52,22 @@ class WorldMotionCommandsTest(unittest.TestCase):
                     schema = request["output_config"]["format"]["schema"]
                     properties = schema["properties"]["steps"]["items"]["properties"]
                     self.assertIn(command["do"], properties["do"]["enum"])
+                    self.assertIn(step["target"], properties["target"]["enum"])
                     self.assertEqual(properties["action"]["type"], "string")
-                    self.assertIn(heard if heard != "12m 떨어져" else "12m", request["system"][0]["text"])
+                    if command["do"] == "go_sit":
+                        phrase = heard.removesuffix("에 앉아").removesuffix(" 앉아")
+                        self.assertIn(phrase, request["system"][0]["text"])
+                    else:
+                        self.assertIn(heard if heard != "12m 떨어져" else "12m", request["system"][0]["text"])
+
+    def test_seat_targets_are_specific_to_go_sit(self):
+        for invalid in (None, "sofa", "unknown", ["long"]):
+            with self.subTest(invalid=invalid):
+                self.assertEqual(ai.clamp_steps([{"do": "go_sit", "target": invalid, "gesture": "wave"}]),
+                                 [{"do": "go_sit", "target": "none", "gesture": "none"}])
+        self.assertEqual(ai.clamp_steps([{"do": "move_to", "target": "long"}, {"do": "sit", "target": "single"}]),
+                         [{"do": "move_to", "target": "speaker", "gesture": "none"},
+                          {"do": "sit", "target": "none", "gesture": "none"}])
 
     def test_invalid_distance_refuses_the_plan(self):
         for cm in ("59", "1201", "2m", "60.5", "060", "60\n", 200, None):

@@ -100,6 +100,7 @@ def build(npc_id: str = "kwonjun") -> dict:
         "emotions": persona_ai.EMOTIONS,
         "actions": cloud_actions(),
         "targets": persona_ai.TARGETS,
+        "go_sit_targets": persona_ai.GO_SIT_TARGETS,
         "gestures": persona_ai.GESTURES,
         "max_steps": persona_ai.MAX_STEPS,
         "max_line_chars": persona_ai.MAX_LINE_CHARS,
