@@ -257,7 +257,7 @@ VRChat을 끄지 않고 월드 안의 창(패널)에서도 성격·인상·기�
 .venv\Scripts\python.exe -X utf8 tests\test_review_fixes.py
 .venv\Scripts\python.exe -X utf8 tests\test_codex_voice_edges.py
 .venv\Scripts\python.exe -X utf8 tests\test_triage_fixes.py
-.venvScriptspython.exe -X utf8 tests	est_search_stall.py
+.venv\Scripts\python.exe -X utf8 tests	est_search_stall.py
 node tests/settings_page.test.cjs
 ```
 
