@@ -62,12 +62,17 @@ from urllib.parse import parse_qs
 import numpy as np
 
 import cfg_bridge
+import local_commands
+import osc_mute
+from choice_relay import ChoiceMailbox, read_event
 from voice_options import DEFAULT_MODEL, MODELS, hint_prompt, parse_hints, replace_hints, whisper_beam_size
 from datetime import datetime
 
 import persona_ai
 import persona_store
+import search_links
 import smalltalk
+import tv_history
 
 PORT = 18770
 MARKER = "[W04AI]"                 # prefix the world puts on its output_log lines
@@ -96,7 +101,8 @@ LISTEN_STALE_S = 120               # LISTEN_ON ends by itself if that VRChat log
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOG_PATH = os.path.join(HERE, "voice_log.tsv")
 CLIP_DIR = os.path.join(HERE, "clips")
-VRC_DIR = os.path.expandvars(r"%USERPROFILE%\AppData\LocalLow\VRChat\VRChat")
+VRC_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expandvars(r"%USERPROFILE%\AppData\Local")) + "Low",
+                       "VRChat", "VRChat")
 SETTINGS_HTML = os.path.join(HERE, "settings_page.html")
 SETTINGS_URL_FILE = "settings_url.txt"     # in the store's data folder; settings.cmd opens the address in it
 MAX_POST_BYTES = 256 * 1024
@@ -242,11 +248,15 @@ def start_compaction(st, brain, force: bool = False, wait: bool = False) -> str:
 class Recorder:
     """Keeps the mic open; a short ring buffer covers the moment before the press."""
 
-    def __init__(self, device=None):
+    mute = None
+
+    def __init__(self, device=None, mute=None):
         import sounddevice as sd
         self.sd = sd
         self.device = device
         self.lock = threading.Lock()
+        self.mute = mute
+        self.mute_epoch = 0
         self.recording = False
         self.chunks = []
         self.tap = None                 # gaze mode: a queue that gets every block while it is open
@@ -264,8 +274,16 @@ class Recorder:
         self.stream.start()
 
     def _callback(self, indata, frames, t, status):
-        block = indata[:, 0].copy()
         with self.lock:
+            if self.mute is not None:
+                muted, epoch = self.mute.snapshot
+                if epoch != self.mute_epoch:
+                    self.mute_epoch = epoch
+                    self.pre.clear()
+                    self.chunks.clear()
+                if muted:
+                    return
+            block = indata[:, 0].copy()
             if self.tap is not None:
                 self.tap.put(block)
             if self.recording and len(self.chunks) < self.max_chunks:
@@ -280,8 +298,9 @@ class Recorder:
         0.5 s already in the ring. Nothing reaches the listener before this call or after close_tap."""
         with self.lock:
             self.tap = queue.Queue()
-            for block in self.pre:
-                self.tap.put(block)
+            if self.mute is None or self.mute.snapshot == (False, self.mute_epoch):
+                for block in self.pre:
+                    self.tap.put(block)
             return self.tap
 
     def close_tap(self):
@@ -290,7 +309,8 @@ class Recorder:
 
     def start(self):
         with self.lock:
-            self.chunks = list(self.pre)
+            self.chunks = (list(self.pre) if self.mute is None or
+                           self.mute.snapshot == (False, self.mute_epoch) else [])
             self.pre.clear()
             self.recording = True
 
@@ -577,6 +597,18 @@ class SearchReply(dict):
         return self.tail.npc_epoch[npc] == self.npc_epoch and self.tail.npc_state[npc]
 
 
+class DialogReply(dict):
+    def __init__(self, row, job, batch, index, previous, more):
+        super().__init__(row, seq=job.seq, more=more)
+        self.tail, self.epochs, self.batch, self.previous = job.tail, dict(job.tail.npc_epoch), batch, previous
+        self.index = index
+        gesture = self.pop("gesture", "none")
+        self["steps"] = [{"do": "gesture", "gesture": gesture}]
+
+    def valid(self):
+        return self.tail.npc_epoch == self.epochs and all(self.tail.npc_state.values())
+
+
 class ReplyQueue(queue.Queue):
     # W04Probe keeps one pending body per NPC for 11 s. A later body could replace a search result.
     search_play_window = 11.5
@@ -613,16 +645,23 @@ class ReplyQueue(queue.Queue):
                         del self.statuses[key]
                         return status
                 for i, reply in enumerate(self.queue):
-                    if isinstance(reply, SearchReply) and not reply.valid():
+                    if isinstance(reply, (SearchReply, DialogReply)) and not reply.valid():
                         continue
                     npc = reply.get("npc")
                     ready = self.protected_until.get(npc, (None, 0))[1]
+                    if isinstance(reply, DialogReply):
+                        if reply.index != reply.batch["next"]:
+                            continue
+                        ready = max(ready, reply.batch["ready"])
                     if ready > now:
                         wake = min(wake, ready)
                         continue
                     del self.queue[i]
                     if isinstance(reply, SearchReply) and reply.final:
                         self.protected_until[npc] = reply["seq"], now + self.search_play_window
+                    if isinstance(reply, DialogReply):
+                        reply.batch["next"] += 1
+                        reply.batch["ready"] = now + min(12, max(5.5, 1 + len(reply["line"]) * 0.1))
                     return reply
                 if now >= deadline:
                     raise queue.Empty
@@ -642,6 +681,7 @@ class ReplyQueue(queue.Queue):
 
 
 replies = ReplyQueue()
+choice_mailbox = ChoiceMailbox()
 _seq = 0
 UNBOUND = object()      # answer(): "no dictation decision was attached to this job" (push-to-talk)
 
@@ -665,6 +705,8 @@ class Utterance:
     started: float = 0.0
     ended: float = 0.0
     vad_speech_s: float | None = None
+    choice: dict | None = None
+    mute_epoch: int = 0
 
     def context(self):
         return self.tail, self.npc, self.npc_epoch, self.speaker
@@ -773,6 +815,15 @@ class Handler(BaseHTTPRequestHandler):
         store = self.server.store.for_npc(npc)
         brain = select_brain(getattr(self.server, "brain", None), npc)
         state = store.state()
+        state["settings"].update(store.brain_options())
+        state["brain_access"] = self.server.brain_settings.brain_access(store.speaker if store.speaker_known else "")
+        other = self.server.store.for_npc(next(key for key in persona_store.NPC_IDS if key != npc))
+        with other.lock:
+            state["other_impressions"] = {"npc": other.npc_name(), "players": [
+                {"name": other.player_label(name), "note": entry["note"]}
+                for name, entry in sorted(other.players.items()) if entry["note"]
+            ]}
+        state["search_links"] = search_links.recent.snapshot(store.root_dir, npc)
         state["ai"] = brain.model if brain is not None else ""
         state["rules"] = persona_ai.RULES
         state["system_preview"] = (brain.system_prompt() if brain is not None
@@ -784,7 +835,8 @@ class Handler(BaseHTTPRequestHandler):
         t0 = now_ms()
         path, _, query = self.path.partition("?")
         log("HTTP_IN", path)                   # the query (token) is never written to the log
-        if path in ("/poll", "/ping") or path.startswith("/ping/"):
+        choice_npc = path.removeprefix("/choice/") if path.startswith("/choice/") else ""
+        if path in ("/poll", "/ping") or path.startswith("/ping/") or choice_npc in persona_store.NPC_IDS:
             # The world asks with this PC's own address and never sends Origin. Another site's name pointed
             # at 127.0.0.1 (DNS rebinding) or a web page's cross-site request is turned away BEFORE a reply
             # is taken from the queue, so it can neither read nor swallow an answer.
@@ -792,6 +844,8 @@ class Handler(BaseHTTPRequestHandler):
                     or self.headers.get("Origin") is not None
                     or (self.headers.get("Sec-Fetch-Site") or "none").lower() not in ("none", "same-origin")):
                 self._send("{}", 403, "application/json")
+            elif choice_npc:
+                self._send(json.dumps(choice_mailbox.take(choice_npc), ensure_ascii=False), ctype="application/json")
             elif path == "/poll":
                 try:
                     reply = replies.get_for_world(POLL_WAIT_S, include_state=True)
@@ -808,6 +862,8 @@ class Handler(BaseHTTPRequestHandler):
                             replies.retry_search(reply)
                             return
                         try:
+                            if isinstance(reply, DialogReply):
+                                reply.batch["chat"].remember(reply, reply.previous)
                             for row in outgoing.get("dialog") or [outgoing]:
                                 if row.get("line"):
                                     lines = row.get("lines") or {}
@@ -859,6 +915,17 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("bad request")
             npc = persona_store.npc_id(req.get("npc"))
             st = self.server.store.for_npc(npc)
+            settings = req.get("settings")
+            model_patch = {}
+            if isinstance(settings, dict):
+                model_patch = {key: settings.pop(key) for key in ("brain_model", "brain_effort") if key in settings}
+                if not settings:
+                    del req["settings"]
+            if model_patch or "brain_unlocked" in req:
+                if "brain_unlocked" in req and type(req["brain_unlocked"]) is not bool:
+                    raise ValueError("모델 잠금 값이 올바르지 않습니다.")
+                self.server.brain_settings.change_brain(st.speaker if st.speaker_known else "",
+                                                        model_patch, req.get("brain_unlocked"))
             st.apply(req)
             if req.get("compact") == "undo":
                 err = st.compaction_undo()
@@ -892,6 +959,7 @@ def make_server(port: int, store, brain=None, token: str = None, bridge=None) ->
     server = ExclusiveServer(("127.0.0.1", port), Handler)
     server.daemon_threads = True
     server.store, server.brain, server.bridge = store, brain, bridge
+    server.brain_settings = bridge or (cfg_bridge.CfgBridge(store) if store is not None else None)
     server.token = token or secrets.token_urlsafe(24)
     server.settings_url = f"http://127.0.0.1:{server.server_address[1]}/settings?t={server.token}"
     return server
@@ -935,6 +1003,8 @@ class LogTail:
         self.chat_epoch = 0
         self.global_mode = False
         self.content_level = 0
+        self.playback = tv_history.PlaybackLog()
+        self.clarifications = {}
         self.buf = b""
         self.pos = 0
         self.fh = open(path, "rb")
@@ -948,7 +1018,9 @@ class LogTail:
             world = cfg_bridge.world_from_line(line, self.world)
             if world != self.world:
                 self.npc_state = dict(DEFAULT_NPC_STATE)
+                self.playback = tv_history.PlaybackLog()
             self.world = world
+            self.playback.feed(line)
             update_npc_state(self.npc_state, line)
             if "Initialized PlayerAPI" in line:
                 m = LOCAL_PLAYER_RE.search(line)
@@ -1003,13 +1075,17 @@ def listen_mode_from_env() -> str:
 
 
 def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=None, bridge=None, stop=None,
-              listen_mode: str = None):
+              listen_mode: str = None, mute=None):
     """Follows every recent output_log at once. [W04AI] lines count only from a log whose client is in
     an allowed world (bridge.world_allowed). stop: a threading.Event that ends the loop (tests).
     listen_mode: "gaze" (LISTEN_ON/OFF open the mic to the voice detector; jump still works) or "ptt"."""
     global _seq
     store = store or (brain.store if brain is not None else persona_store.Store())
     bridge = bridge or cfg_bridge.CfgBridge(store, log=log)
+    summary_brain = select_brain(brain, "kwonjun")
+    summarize = getattr(summary_brain, "summarize_video", None) if getattr(summary_brain, "client", None) else None
+    cache = tv_history.VideoCache(store.root_dir, os.path.join(log_dir, "Tools", "yt-dlp.exe"),
+                                 summarize)
     listen_mode = listen_mode or listen_mode_from_env()
     if listen_mode == "gaze" and not hasattr(rec, "open_tap"):
         listen_mode = "ptt"                     # this microphone stand-in cannot stream
@@ -1020,8 +1096,42 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
     listen = {"on": False, "path": None, "seen": 0.0, "npc": "kwonjun", "speaker": ""}
     turn = {"pending": 0, "ptt": False, "gaze_active": None, "speech_epoch": 0, "npc": "kwonjun",
             "stage": "idle"}
+    mute = mute or osc_mute.MuteState()
     chat_inflight = False
     chats = None
+
+    def mic_valid(epoch):
+        muted, current = mute.snapshot
+        return not muted and epoch == current
+
+    def explicit_chat(job, previous=None):
+        if job.tail is None or not all(job.tail.npc_state.values()):
+            return False
+        with state_lock:
+            epochs = dict(job.tail.npc_epoch)
+            speech = turn["speech_epoch"]
+
+        def valid():
+            return ((stop is None or not stop.is_set()) and job.tail.npc_epoch == epochs
+                    and epochs[job.npc] == job.npc_epoch and all(job.tail.npc_state.values())
+                    and turn["speech_epoch"] == speech)
+
+        chat = smalltalk.SmallTalk(store)
+        result, source = chat.reply(select_brain(brain, job.npc), valid,
+                                    job.tail.global_mode, job.tail.content_level,
+                                    requested_by_player=True, opener=previous)
+        if result is None:
+            return True
+        rows = result["dialog"]
+        batch = {"ready": time.monotonic() + (5.5 if previous else 0), "chat": chat, "next": 0}
+        with state_lock:
+            if not valid():
+                return True
+            for index, row in enumerate(rows):
+                replies.put(DialogReply(row, job, batch, index, previous, index + 1 < len(rows)))
+                previous = row
+        log("NPC_CHAT", f"source={source}\trequested=1\tlines={len(rows)}")
+        return True
 
     def player_busy():
         return turn["ptt"] or turn["gaze_active"] or turn["pending"] > 0
@@ -1080,7 +1190,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
         return (tail.player if tail is not None else "") or store.speaker
 
     def speaker_is(name: str):
-        if name and name != store.speaker:
+        if name and (not store.speaker_known or name != store.speaker):
             store.set_speaker(name)
             log("SPEAKER", name, say=f"말하는 사람(내 VRChat 이름): {name}")
 
@@ -1098,7 +1208,9 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
         try:
             log("WORKER_ERROR", f"seq={job.seq}\t{type(error).__name__}: {str(error)[:120]}",
                 say=f"이번 말은 처리하지 못함 ({type(error).__name__}). 다음 말부터 다시 받습니다.")
-            if not job.by_voice:
+            if job.choice:
+                choice_mailbox.put(job.npc, {"choice_id": job.choice["id"]})
+            elif not job.by_voice:
                 replies.put(dict(make_reply("", 0.0), npc=job.npc, seq=job.seq))
         except OSError:
             pass
@@ -1163,6 +1275,11 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                 complete(job, prepared)
 
     def transcribe(job):
+        if job.choice:
+            text = job.choice["text"]
+            return text, "choice", 0.0, "", None, text
+        if not mic_valid(job.mute_epoch):
+            return
         dictate = job.dictate
         if dictate is UNBOUND:              # push-to-talk keeps its old rule: what is armed when it is handled
             dictate = bridge.dictate_target()
@@ -1177,10 +1294,14 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
             hints = hint_store.settings["stt_hints"]
         raw = []
         text, reason, stt_ms = judge(job.audio, job.held_ms, tr, hints, raw_sink=raw, vad_speech_s=job.vad_speech_s)
+        if not mic_valid(job.mute_epoch):
+            return
         clip = save_clip(job.audio, job.seq) if save else ""
         return text, reason, stt_ms, clip, dictate, raw[0] if raw else ""
 
     def answer(job, text, reason, stt_ms, clip, dictate, raw):
+        if not job.choice and not mic_valid(job.mute_epoch):
+            return
         seq, t_up, npc, by_voice = job.seq, job.t_up, job.npc, job.by_voice
         st = store.for_npc(npc)
         speaker = job.speaker or st.speaker
@@ -1198,7 +1319,8 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                 log("REPLY", f"seq={seq}\tafter_release_ms={now_ms() - t_up:.0f}\tdictate")
             return
         log("STT", f"seq={seq}\t{reason}\tstt_ms={stt_ms:.0f}\tafter_release_ms={now_ms() - t_up:.0f}\t{speaker}\t{text}\t{clip}",
-            say=(f"{speaker} 마이크 ({stt_ms:.0f} ms): {text}" if text else f"못 알아들음 ({reason})"))
+            say=(f"{speaker} 월드 선택지: {text}" if job.choice else
+                 f"{speaker} 마이크 ({stt_ms:.0f} ms): {text}" if text else f"못 알아들음 ({reason})"))
         selected_brain = select_brain(brain, npc) if text else None
         searching = False
 
@@ -1206,13 +1328,27 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
             return (job.tail.npc_epoch[npc] == job.npc_epoch and job.tail.npc_state[npc]
                     and (stop is None or not stop.is_set()))
 
-        if text and selected_brain is not None:
-            if search_valid():
+        chat_request = not job.choice and smalltalk.requested(text)
+        if chat_request and explicit_chat(job):
+            return
+        command = local_commands.world_command(text)
+        if (chat_request or command is not None) and search_valid():
+            notice = (("둘이 이야기하려면 두 NPC를 켜 줘.", "Turn on both NPCs so we can talk.",
+                       "二人で話せるように、両方のNPCをオンにしてね。") if chat_request
+                      else ("알겠어.", "Got it.", "わかった。"))
+            lines = persona_ai.localized_lines(notice, job.tail.global_mode)
+            reply = {"line": lines["ko"], "lines": lines, "steps": [command] if command else [],
+                     "emotion": "neutral", "intensity": 0.5, "heard": text}
+            selected_brain = None
+        elif text and selected_brain is not None:
+            if search_valid() and not job.choice:
                 replies.status("thinking", job.tail, npc, job.npc_epoch, speaker)
 
             def interim(r):
                 # web search turn: show "잠깐만, 찾아볼게!" now; "more" makes the world poll again for the answer
                 nonlocal searching
+                if job.choice:
+                    return
                 searching = r.get("interim") == "search"
                 first = {k: r[k] for k in ("emotion", "intensity", "steps", "lines", "line") if k in r}
                 first["steps"] = [step for step in first["steps"] if step["do"] in ("look_at", "gesture", "wait")]
@@ -1239,10 +1375,21 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                     named = bool(display_name and re.search(pattern, text, re.IGNORECASE))
                 with st.lock:
                     check_address = st.settings["filter_overheard"] and not (follow_up or named)
+                with state_lock:
+                    prior, until = job.tail.clarifications.pop(npc, ([], 0.0))
+                    context = prior if time.monotonic() <= until else []
+                    if job.choice:
+                        previous, question = job.choice["context"]
+                        context = [previous or (context[0] if context else ""), question]
+                    tv_rows = cache.context(job.tail.playback, text, " ".join(context))
                 options.update(content_level=job.tail.content_level, utterance={
-                    "speaker": speaker, "source": "PC 주인 마이크", "raw": raw,
+                    "speaker": speaker, "source": "월드 선택지" if job.choice else "PC 주인 마이크", "raw": raw,
                     "time": datetime.fromtimestamp(captured_at).astimezone().isoformat(timespec="seconds"),
-                }, check_address=check_address)
+                }, check_address=check_address and not context and not job.choice)
+                if context:
+                    options["clarification"] = context
+                if tv_rows:
+                    options["tv_rows"] = tv_rows
             ai = selected_brain.reply(text, speaker=speaker, on_interim=interim, **options)
             if ai.get("for_me") is False:
                 log("AI_SKIP", f"seq={seq}\tnpc={npc}\tai_ms={ai['ai_ms']}\t넘김",
@@ -1253,8 +1400,11 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
             reply = {k: ai[k] for k in ("emotion", "intensity", "steps", "lines", "line")}
             if "output_language" in ai:
                 reply["output_language"] = ai["output_language"]
+            if ai.get("choices"):
+                reply["choices"] = ai["choices"]
             # The world uses the live pose when it starts a movement step, including getting up.
-            reply.update(heard=text, stt_ms=round(stt_ms), ai_ms=ai["ai_ms"], seq=seq, npc=npc)
+            reply.update(heard=search_links.hide_urls(text) if ai.get("search_query") else text,
+                         stt_ms=round(stt_ms), ai_ms=ai["ai_ms"], seq=seq, npc=npc)
             err = ai.get("error", "")
             kept = ai.get("remembered") or {}
             if ai.get("recall"):
@@ -1268,14 +1418,24 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                     say=f"  └ {st.player_label(speaker)}에 대한 인상을 고쳐 씀: {kept['impression']}")
             if kept.get("memory_note"):
                 log("MEMORY", f"seq={seq}\t{kept['memory_note']}", say=f"  └ 기억에 기록함: {kept['memory_note']}")
+        elif job.choice:
+            reply = {}
         elif by_voice and not text:
             # open mic: a noise that was not speech must not make the NPC say "응? 잘 못 들었어."
             return
         else:
             reply = make_reply(text, stt_ms)
         reply.update(npc=npc, seq=seq)
+        other = next(key for key in persona_store.NPC_IDS if key != npc)
+        reaction = (selected_brain is not None and not job.choice and not ai.get("error")
+                    and all(job.tail.npc_state.values()) and smalltalk.addressed(reply["line"], store.for_npc(other)))
+        if reaction:
+            reply["more"] = True
         with state_lock:
-            if searching:
+            if job.choice:
+                if search_valid():
+                    choice_mailbox.put(npc, dict(reply, choice_id=job.choice["id"]))
+            elif searching:
                 if not search_valid():
                     return
                 if turn["pending"] > 1 or turn["gaze_active"] or turn["ptt"]:
@@ -1283,9 +1443,18 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                 replies.put(SearchReply(reply, job, final=True))
             else:
                 replies.put(reply)
-            if selected_brain is not None and reply["line"] and not ai.get("error") and search_valid():
+            if reply.get("choices") and reply.get("line") and search_valid():
+                job.tail.clarifications[npc] = ([text[:200], reply["line"]], time.monotonic() + 45)
+            if selected_brain is not None and reply.get("line") and not ai.get("error") and search_valid():
                 job.tail.last_answer[npc] = (job.npc_epoch, speaker, now_ms())
         log("REPLY", f"seq={seq}\tafter_release_ms={now_ms() - t_up:.0f}")
+        if selected_brain is not None and ai.get("links"):
+            search_links.recent.add(st.root_dir, npc, ai["links"])
+            for link in ai["links"]:
+                log("SEARCH_LINK", f"npc={npc}\t{link['title']}\t{link['url']}",
+                    say=f"검색 출처 {link['title']} — {link['url']}")
+        if reaction and search_valid():
+            explicit_chat(job, {"npc": npc, "line": reply["line"]})
         if selected_brain is not None:      # the reply is already on its way: tidy the memos if they grew
             try:
                 start_compaction(st, selected_brain)
@@ -1304,7 +1473,20 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
         utterance_tail = None
         utterance_npc, utterance_speaker, utterance_dictate = "kwonjun", "", None
         utterance_epoch, utterance_started = 0, 0.0
+        audio_epoch = mute.snapshot[1]
         while stop is None or not stop.is_set():
+            muted, current_epoch = mute.snapshot
+            if muted or current_epoch != audio_epoch:
+                audio_epoch = current_epoch
+                if tap is not None:
+                    rec.close_tap()
+                    tap = None
+                det.reset()
+                with state_lock:
+                    turn["gaze_active"] = None
+                if muted:
+                    time.sleep(0.02)
+                    continue
             with state_lock:
                 on, seen, current_npc, current_speaker = listen["on"], listen["seen"], listen["npc"], listen["speaker"]
                 current_tail = listen.get("tail") if on else None
@@ -1340,6 +1522,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                         finished = det.feed(block)
                         if not was_active and (det.active or finished):
                             turn["speech_epoch"] += 1
+                            replies.discard(lambda reply: not isinstance(reply, DialogReply))
                             utterance_started = time.monotonic() - VAD_ONSET_VOICED * VAD_FRAME_S
                             if utterance_dictate is None:
                                 replies.status("hearing", utterance_tail, utterance_npc,
@@ -1361,7 +1544,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                                 say="말 끝남, 글자로 바꾸는 중...")
                             work.put(Utterance(_seq, now_ms(), -1.0, to_16k(audio, det.rate), utterance_npc, True,
                                               utterance_tail, utterance_epoch, utterance_speaker, utterance_dictate,
-                                              utterance_started, ended, vad_speech_s=speech_s))
+                                              utterance_started, ended, vad_speech_s=speech_s, mute_epoch=audio_epoch))
                             det.reset()
                             break
                     context = (utterance_tail, utterance_npc, utterance_epoch, utterance_speaker)
@@ -1404,16 +1587,49 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
         # Called with state_lock, so a search cannot publish after its NPC was turned off.
         for key in (tail.npc_epoch if npc is None else (npc,)):
             tail.npc_epoch[key] += 1
+            tail.clarifications.pop(key, None)
         replies.discard(lambda reply: not (isinstance(reply, SearchReply) and reply.tail is tail
-                                          and (npc is None or reply["npc"] == npc)))
+                                          and (npc is None or reply["npc"] == npc))
+                        and not (isinstance(reply, DialogReply) and reply.tail is tail))
 
     def handle(tail: LogTail, line: str):
         global _seq
+        if bridge.world_allowed(tail.world) and ("[Video Playback]" in line or "[W04AI] TV_HISTORY" in line):
+            with state_lock:
+                cache.watch(tail.playback.feed(line))
+            return
+        if bridge.world_allowed(tail.world) and "[W04AI] CHOICE_" in line:
+            event = read_event(line, "[W04AI] CHOICE_DONE ")
+            if event:
+                with state_lock:
+                    tail.clarifications.pop(event["npc"], None)
+                return
+            event = read_event(line, "[W04AI] CHOICE_CONTEXT ")
+            if event and tail.npc_state[event["npc"]]:
+                with state_lock:
+                    tail.clarifications[event["npc"]] = (event["context"], time.monotonic() + 45)
+                return
+            event = read_event(line, "[W04AI] CHOICE_INPUT ")
+            if event and tail.npc_state[event["npc"]]:
+                npc = event["npc"]
+                with state_lock:
+                    _seq += 1
+                    turn["pending"] += 1
+                    work.put(Utterance(_seq, now_ms(), 0.0, None, npc, False, tail,
+                                       tail.npc_epoch[npc], speaker_of(tail), choice=event))
+            return
         if MARKER not in line:
             world = cfg_bridge.world_from_line(line, tail.world)
             if world != tail.world or ("Joining " in line and cfg_bridge.JOIN_RE.match(line)):
                 tail.global_mode = False
                 tail.content_level = 0
+                with state_lock:
+                    tail.playback = tv_history.PlaybackLog()
+                    tail.clarifications.clear()
+                    if world == tail.world:
+                        invalidate_search(tail)
+                if world == tail.world:
+                    bridge.world_changed(tail.path)
             if world != tail.world:
                 with state_lock:
                     tail.world = world
@@ -1433,7 +1649,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                     tail.player = m.group(1)
                 speaker_is(m.group(1) if m else "")
             return
-        if bridge.handle_line(tail.path, tail.world, line):
+        if bridge.handle_line(tail.path, tail.world, line, tail.player):
             return
         m = EVENT_RE.search(line)
         if not m:
@@ -1503,12 +1719,17 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
             if listen["path"] == tail.path and listen["npc"] == npc:
                 listen_off(line.strip()[-80:], say="듣기 멈춤 (NPC를 안 보거나 멀어짐)")
         elif event == "PTT_DOWN":
+            muted, epoch = mute.snapshot
+            if muted:
+                log("PTT_IGNORED", "osc_muted")
+                return
             with state_lock:
                 clear_replies(preserve_search=True)
                 turn["speech_epoch"] += 1
                 turn["ptt"] = True
                 turn["npc"] = npc
                 turn["npc_epoch"] = tail.npc_epoch[npc]
+                turn["mute_epoch"] = epoch
                 turn["path"] = tail.path
                 turn["down_at"] = time.monotonic()
                 if bridge.dictate_target() is None:
@@ -1518,6 +1739,9 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
         else:
             # Ignore unmatched releases (including presses refused while this NPC was off).
             if not turn["ptt"] or turn.get("path") != tail.path:
+                return
+            if not mic_valid(turn["mute_epoch"]):
+                ptt_cancel("osc_muted", tail.path)
                 return
             m = re.search(r"held_ms=(\d+)", line)
             held_ms = float(m.group(1)) if m else -1.0
@@ -1540,7 +1764,8 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                 log("PTT_ERROR", type(e).__name__)
                 replies.put(dict(make_reply("", 0.0), npc=target_npc, seq=seq))
                 return
-            work.put(Utterance(seq, t_up, held_ms, audio, target_npc, False, tail, npc_epoch, speaker_of(tail)))
+            work.put(Utterance(seq, t_up, held_ms, audio, target_npc, False, tail, npc_epoch, speaker_of(tail),
+                               mute_epoch=turn["mute_epoch"]))
 
     tails = {}                                  # path -> LogTail; kept (parked) when the file goes quiet
     next_scan = 0.0
@@ -1555,6 +1780,9 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                         tails[path].resume()    # continues from where it stopped: nothing skipped or repeated
                     else:
                         tails[path] = LogTail(path)
+                        if not hasattr(tails[path], "playback"):
+                            tails[path].playback = tv_history.PlaybackLog()
+                            tails[path].clarifications = {}
                         added.append(tails[path])
                 except OSError:
                     continue
@@ -1578,8 +1806,13 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
                 for tail in added:
                     speaker_is(tail.player)
                     world_note(tail)
+                    if bridge.world_allowed(tail.world):
+                        for url, _, _ in tail.playback.rows:
+                            cache.watch(tv_history.youtube_id(url))
         if turn["ptt"] and time.monotonic() - turn.get("down_at", 0.0) > PTT_MAX_S:
             ptt_cancel("too_long")              # the release line never came (client closed, log lost)
+        if turn["ptt"] and not mic_valid(turn["mute_epoch"]):
+            ptt_cancel("osc_muted")
         busy = False
         for tail in list(tails.values()):
             try:
@@ -1596,6 +1829,7 @@ def watch_log(log_dir: str, rec, tr: Transcriber, save: bool, brain=None, store=
         with state_lock:
             invalidate_search(tail)
         tail.close()
+    cache.close()
 
 
 def make_brain(mode: str, store=None):
@@ -1662,9 +1896,13 @@ def main():
                 "대답이 두 번 나옵니다. 이미 켜진 검은 창을 쓰거나, 그 창을 닫고 다시 켜 주세요. "
                 "/ This app is already running.")
         sys.exit(1)
+    stop = threading.Event()
+    mute = osc_mute.MuteState()
+    if not args.wav:
+        mute.start(log, stop)
     print("Whisper 모델을 불러오는 중... (처음 몇 초 걸림)", flush=True)
     tr = Transcriber(args.model)
-    rec = WavRecorder(args.wav) if args.wav else Recorder(args.device)
+    rec = WavRecorder(args.wav) if args.wav else Recorder(args.device, mute=mute)
     who = ("NPC별 설정 모델" if args.ai in MODELS else
            "따라 말하기(AI 꺼짐)" if args.ai == "off" else "가짜 AI")
     how = ("NPC를 가까이서 바라보고 말하기 (월드에서 점프 말하기를 켰다면 점프로도 됨)" if args.listen == "gaze"
@@ -1673,7 +1911,7 @@ def main():
         say=f"준비 완료. 마이크: {rec.name} / 계산: {tr.device} / 답하는 쪽: {who} / 말 거는 법: {how} / "
             f"불러오기 {tr.load_ms / 1000:.1f}초")
     threading.Thread(target=watch_log, args=(args.log_dir, rec, tr, args.save_clips, brain, store, bridge),
-                     kwargs={"listen_mode": args.listen}, daemon=True).start()
+                     kwargs={"listen_mode": args.listen, "mute": mute, "stop": stop}, daemon=True).start()
     print(f"월드 연결 대기: http://127.0.0.1:{args.port}/poll  (끄려면 이 창을 닫거나 Ctrl+C)", flush=True)
     print(f"허용한 월드 {len(world_ids)}개 (Build & Test 로컬 시험 별도 허용). "
           "다른 월드에서 온 점프 표시와 설정 창 요청은 무시합니다.", flush=True)
@@ -1691,6 +1929,8 @@ def main():
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        stop.set()
 
 
 if __name__ == "__main__":

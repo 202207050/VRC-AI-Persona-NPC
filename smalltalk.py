@@ -10,6 +10,24 @@ from persona_store import NPC_IDS
 
 SCRIPT = Path(__file__).with_name("smalltalk.json")
 REQUEST_RE = re.compile(r"\[W04AI\] NPC_CHAT_REQ[ \t]+npcs=([^\s]+)[ \t]+watcher=([^\r\n]+)\Z")
+DIALOG_REQUEST = re.compile(
+    r"(?:둘\s*이(?:서)?|두\s*NPC(?:가|는)?|NPC\s*(?:들)?끼리|너희\s*끼리|서로)\s*"
+    r"(?:먼저\s*)?(?:대화|얘기|이야기|잡담)(?:를)?\s*(?:한번\s*|한\s*번\s*)?"
+    r"(?:해(?:\s*(?:봐요?|줘|줄래|볼래|주세요))?|하(?:자|라고|도록))(?=$|[\s.!?,…！？。])", re.IGNORECASE
+)
+REACTION_NAMES = {"kwonjun": ("kwonjun", "권준", "권준이"), "itoa": ("itoa", "itoar", "이토아")}
+
+
+def requested(text):
+    return DIALOG_REQUEST.search(text) is not None
+
+
+def addressed(line, other):
+    names = sorted({other.npc_name(), *REACTION_NAMES[other.npc]}, key=len, reverse=True)
+    names = "|".join(re.escape(name) for name in names if name)
+    # Vocatives are direct addresses. Plain mentions such as '이토아가 그러더라' are not.
+    return re.search(rf"(?:^|[,.!?…，]\s*)(?:야[ ,]+)?(?:{names})(?:(?:아|야|\s*씨)(?=\s|[,.!?…！？，]|$)|\s*[,，:!?！？]|$)",
+                     line, re.IGNORECASE) is not None
 
 
 def parse_request(line: str):
@@ -65,17 +83,20 @@ class SmallTalk:
         self.recent.append(index)
         return clamp_dialog(self.scripts[index], global_mode)
 
-    def reply(self, brain, still_idle, global_mode=False, content_level=0):
+    def reply(self, brain, still_idle, global_mode=False, content_level=0, requested_by_player=False, opener=None):
         """Return (world payload, source), with a scripted fallback for a failed model call."""
         dialog = None
         source = "script"
         if still_idle() and getattr(brain, "client", None) is not None:
             try:
-                if self.store.reserve_smalltalk_ai(self.rng.random()) and still_idle():
+                reservation = {"forced": True} if requested_by_player else {}
+                if self.store.reserve_smalltalk_ai(self.rng.random(), **reservation) and still_idle():
                     profiles = [self.store.for_npc(npc) for npc in NPC_IDS]
                     options = {"global_mode": True} if global_mode else {}
                     if content_level:
                         options["content_level"] = content_level
+                    if opener:
+                        options["opener"] = opener
                     dialog = clamp_dialog(brain.smalltalk(profiles, **options), global_mode)
                     if global_mode and dialog and any(
                         not row.get("lines", {}).get(lang) for row in dialog for lang in ("en", "ja")
@@ -86,4 +107,22 @@ class SmallTalk:
                 source = "fallback"
         if not still_idle():
             return None, source
-        return {"npc": NPC_IDS[0], "dialog": dialog or self.scripted(global_mode), "smalltalk": True}, source
+        if opener:
+            # A normal answer already delivered the opening turn. Reply once to it.
+            partner = next(npc for npc in NPC_IDS if npc != opener["npc"])
+            if dialog:
+                dialog = [next(row for row in dialog if row["npc"] == partner)]
+            else:
+                lines = ("응, 나 듣고 있어.", "Yeah, I'm listening.", "うん、聞いてるよ。")
+                dialog = [{"npc": partner, "line": lines[0], "emotion": "neutral", "intensity": 0.5,
+                           "gesture": "nod", "lines": dict(zip(("ko", "en", "ja"), lines if global_mode else lines[:1]))}]
+        return {"npc": (dialog or [{}])[0].get("npc", NPC_IDS[0]),
+                "dialog": dialog or self.scripted(global_mode), "smalltalk": True}, source
+
+    def remember(self, row, previous=None):
+        npc = row["npc"]
+        partner = self.store.for_npc(next(key for key in NPC_IDS if key != npc))
+        current = self.store.for_npc(npc)
+        current.record_npc_exchange(partner.npc_name(), (previous or {}).get("line", ""), row["line"])
+        if previous:
+            partner.record_npc_exchange(current.npc_name(), row["line"], "")

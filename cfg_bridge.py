@@ -19,6 +19,7 @@ to attack this app could also fake a "Joining ..." line. The world check stops o
 """
 import hashlib
 import json
+import os
 import re
 import threading
 import time
@@ -92,7 +93,9 @@ class CfgBridge:
     def __init__(self, store: "persona_store.Store", world_ids=(), log=None, clock=time.monotonic):
         self.store = store
         self._bridges = {store.npc: self}
-        self._shared = {"dictate": None, "npc": "kwonjun"}
+        self._shared = {"dictate": None, "npc": "kwonjun", "brain_unlocked": False, "model_panel": False}
+        self.brain_editors = frozenset(name.strip() for name in
+                                       os.environ.get("W04_MODEL_EDITORS", "kwonjun").split(",") if name.strip())
         self.world_ids = set(world_ids)
         self.log = log or (lambda kind, detail="", say="": None)
         self.clock = clock
@@ -131,6 +134,7 @@ class CfgBridge:
     def world_changed(self, source) -> None:
         """The client writing `source` joined or left a world: its window and dictation end."""
         with self.cond:
+            self._shared["brain_unlocked"] = False
             if self.open_source == source:
                 self.open_until, self.open_source = 0.0, None
             if self.dictate and self.dictate["source"] == source:
@@ -147,7 +151,7 @@ class CfgBridge:
 
     # ------------------------------------------------------------ world -> app
 
-    def handle_line(self, source, world, line: str) -> bool:
+    def handle_line(self, source, world, line: str, local_player="") -> bool:
         """One NEW log line. True if it was a CFG_* line (applied or refused)."""
         if "CFG_" not in line:
             return False
@@ -162,6 +166,7 @@ class CfgBridge:
             with self.cond:
                 selected = re.search(r"\bnpc=([^\s]+)", m.group(2))
                 self._shared["npc"] = persona_store.npc_id(selected.group(1) if selected else None)
+                self._shared["model_panel"] = bool(re.search(r"\bmodels=1\b", m.group(2)))
                 self.open_until, self.open_source = self.clock() + WINDOW_S, source
                 self.cond.notify_all()
             self.log("CFG_OPEN", f"window_s={WINDOW_S:.0f}", say=f"월드 설정 창이 열림 ({WINDOW_S:.0f}초 동안 내용을 보냄)")
@@ -174,14 +179,33 @@ class CfgBridge:
         except ValueError:
             self.log("CFG_SET", "bad_json\trefused", say="월드 설정 창: 알 수 없는 요청이라 무시함")
             return True
-        self.apply(req, source)
+        self.apply(req, source, local_player)
         return True
 
-    def apply(self, req: dict, source=None) -> str:
+    def brain_access(self, local_player):
+        with self.cond:
+            editor = local_player in self.brain_editors
+            unlocked = self._shared["brain_unlocked"]
+            return {"editor": editor, "unlocked": unlocked, "can_edit": editor or (bool(local_player) and unlocked)}
+
+    def change_brain(self, local_player, patch=None, unlocked=None):
+        with self.cond:
+            access = self.brain_access(local_player)
+            if unlocked is not None:
+                if not access["editor"] or type(unlocked) is not bool:
+                    raise ValueError("허용된 사용자가 모델 설정의 잠금을 바꿀 수 있습니다.")
+            if patch:
+                if not access["can_edit"]:
+                    raise ValueError("모델 설정이 잠겨 있습니다.")
+                self.store.set_shared_brain(patch)
+            if unlocked is not None:
+                self._shared["brain_unlocked"] = unlocked
+
+    def apply(self, req: dict, source=None, local_player="") -> str:
         """One edit. Returns '' when applied, else the Korean reason (also kept in self.msg for the panel)."""
         selected = persona_store.npc_id(req.get("npc"))
         if selected != self.store.npc:
-            return self.for_npc(selected).apply(req, source)
+            return self.for_npc(selected).apply(req, source, local_player)
         op = req.get("op") if isinstance(req.get("op"), str) else ""
         text = req.get("text")
         n = len(text) if isinstance(text, str) else 0
@@ -231,24 +255,27 @@ class CfgBridge:
         elif op == "history_clear":
             st.apply({"history_clear": True})
             err, what = "", "최근 대화를 모두 잊음"
-        elif op == "model":
+        elif op in ("model", "effort", "brain_lock"):
             try:
-                st.apply({"settings": {"brain_model": req.get("model")}})
-                err, what = "", "다음 대답부터 쓸 모델을 고침"
-            except ValueError as e:
-                err = str(e)
+                if op == "brain_lock":
+                    if type(req.get("on")) is not bool:
+                        raise ValueError("모델 잠금 값이 올바르지 않습니다.")
+                    self.change_brain(local_player, unlocked=not req["on"])
+                else:
+                    patch = {"brain_model" if op == "model" else "brain_effort": req.get(op)}
+                    if source is None:  # trusted in-process callers may still edit just one NPC
+                        st.apply({"settings": patch})
+                    else:
+                        self.change_brain(local_player, patch=patch)
+                err, what = "", "다음 대답부터 쓸 모델 설정을 고침"
+            except (ValueError, OSError) as e:
+                err = str(e) if isinstance(e, ValueError) else "모델 설정을 저장하지 못했습니다."
         elif op == "smalltalk":
             try:
                 st.set_smalltalk_settings({key: req[key] for key in persona_store.DEFAULT_SMALLTALK if key in req})
                 err, what = "", "두 NPC의 잡담 설정을 고침"
             except (ValueError, OSError) as e:
                 err = str(e) if isinstance(e, ValueError) else "잡담 설정을 저장하지 못했습니다."
-        elif op == "effort":
-            try:
-                st.apply({"settings": {"brain_effort": req.get("effort")}})
-                err, what = "", "다음 대답부터 쓸 생각 깊이를 고침"
-            except ValueError as e:
-                err = str(e)
         elif op in ("auto", "keep_history", "recall", "compact"):
             on = _flag(req.get("on"))
             key, label = {"auto": ("auto_update", "스스로 고쳐 쓰기"), "keep_history": ("keep_history", "최근 대화 이어가기"),
@@ -363,6 +390,8 @@ class CfgBridge:
             return json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
         with self.cond:
+            if self._shared["model_panel"]:
+                body.update(st.brain_options(), brain_access=self.brain_access(st.speaker if st.speaker_known else ""))
             body["rev"] = 2 ** 31                               # widest value while measuring
             while len(pack()) > MAX_CFG_BYTES and body["history"]:
                 body["history"].pop(0)                          # oldest talk first

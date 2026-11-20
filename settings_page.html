@@ -58,7 +58,9 @@
   <section>
     <h2>대답 모델 · 닉네임 인식</h2>
     <p class="sub" id="voiceVersion" hidden>이 기능은 업데이트된 음성 앱을 다음에 시작할 때 사용할 수 있습니다.</p>
-    <label for="brainModel">이 NPC의 대답 모델</label>
+    <p class="sub" id="brainAccess" hidden></p>
+    <div class="row"><button id="brainLock" hidden>모델 설정 잠금 해제</button></div>
+    <label for="brainModel">두 NPC의 대답 모델</label>
     <select id="brainModel" disabled></select>
     <div class="row"><button class="primary" id="saveModel" disabled>모델 저장</button></div>
     <p class="sub">기본은 Haiku 5.5입니다. 저장하면 다음 대답부터 적용됩니다. 이미 만들고 있는 대답은 기존 모델로 마칩니다. AI 꺼짐·가짜 AI 모드에서는 선택만 저장합니다.</p>
@@ -69,7 +71,9 @@
       <tbody id="modelCosts"></tbody>
     </table>
     <p class="sub">고정 입력 3,000 + 나머지 입력 1,000 + 출력 200토큰, API 호출 1회, 5분 캐시 가정입니다. 실제 청구액이 아니며 추가 thinking·검색·재시도·세금은 제외합니다. Opus는 thinking을 끌 수 없어 추가 출력 비용과 시간이 들 수 있습니다. Haiku 입력 10만 토큰 초과는 다른 요금입니다. <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching" target="_blank" rel="noreferrer">요금 출처</a> (2026-11-19 확인).</p>
-    <label for="brainEffort">이 NPC의 생각 깊이</label>
+    <label for="brainEffortRange">두 NPC의 생각 깊이</label>
+    <input type="range" id="brainEffortRange" min="0" max="4" step="1" disabled hidden>
+    <output id="brainEffortLabel" for="brainEffortRange" hidden></output>
     <select id="brainEffort" disabled></select>
     <div class="row"><button class="primary" id="saveEffort" disabled>생각 깊이 저장</button></div>
     <p class="sub">기본은 <b>낮음</b>입니다(지금까지와 같음, 가장 빠름). 높일수록 대답하기 전에 더 오래 생각해서 <b>느려지고 비용이 늘어납니다</b>. 보통 이상에서는 모든 모델이 대답 전에 생각을 하고, 매우 높음·최대는 몇십 초가 걸릴 수 있습니다. Haiku·Sonnet·Opus 5.5 모두 다섯 단계를 쓸 수 있습니다.</p>
@@ -118,7 +122,7 @@
   </section>
 
   <section>
-    <h2>2. 플레이어를 어떻게 생각하는지</h2>
+    <h2>2. 대상 인상</h2>
     <p class="sub">NPC가 사람마다 적어 두는 짧은 인상 메모입니다. 대화하다가 인상이 달라지면 NPC가 스스로 고쳐 씁니다. 직접 고쳐도 됩니다.</p>
     <p class="sub" id="speakerInfo"></p>
     <label class="check"><input type="checkbox" id="autoUpdate"><span>NPC가 대화하면서 <b>스스로</b> 인상과 기억을 고쳐 쓰기 <span class="sub">(끄면 여기 적힌 내용만 쓰고, NPC는 아무것도 바꾸지 않습니다)</span></span></label>
@@ -128,6 +132,13 @@
       <button id="addPlayer">사람 추가</button>
     </div>
     <div class="row"><button class="primary" id="savePlayers">인상 저장</button></div>
+    <h3 id="otherImpressionTitle" hidden>다른 NPC의 인상</h3>
+    <ul id="otherImpressions" hidden></ul>
+  </section>
+
+  <section id="searchSection" hidden>
+    <h2>최근 검색 출처</h2>
+    <ul id="searchLinks"></ul>
   </section>
 
   <section>
@@ -253,8 +264,15 @@ function render(keepPersona) {
   $("keepHistory").checked = S.settings.keep_history;
   $("filterOverheard").checked = S.settings.filter_overheard !== false;
   const supported = Array.isArray(S.model_options) && S.model_options.length > 0;
+  const access = S.brain_access;
+  const canChange = !access || access.can_edit;
+  $("brainAccess").hidden = !access;
+  $("brainAccess").textContent = access?.unlocked ? "모델 설정 잠금 해제됨" : "모델 설정 잠김 · 허용된 사용자만 변경할 수 있습니다.";
+  $("brainLock").hidden = !access?.editor;
+  $("brainLock").textContent = access?.unlocked ? "모델 설정 잠그기" : "모델 설정 잠금 해제";
   $("voiceVersion").hidden = supported;
   for (const id of ["brainModel", "sttHints", "saveModel", "saveHints"]) $(id).disabled = !supported;
+  for (const id of ["brainModel", "saveModel"]) $(id).disabled ||= !canChange;
   if (!dirty.model) {
     $("brainModel").replaceChildren(...(S.model_options || []).map(m => el("option", { value: m.id }, m.name)));
     $("brainModel").value = S.settings.brain_model || "claude-haiku-5-5";
@@ -262,11 +280,18 @@ function render(keepPersona) {
   if (!dirty.hints) $("sttHints").value = S.settings.stt_hints || "";
   const efforts = Array.isArray(S.effort_options) ? S.effort_options : [];   // missing on an older running app
   for (const id of ["brainEffort", "saveEffort", "autoRecall"]) $(id).disabled = !efforts.length;
+  $("brainEffort").hidden = !!access;
+  $("brainEffortRange").hidden = $("brainEffortLabel").hidden = !access || !efforts.length;
+  $("brainEffortRange").disabled = $("saveEffort").disabled = !efforts.length || !canChange;
   if (efforts.length) {
     if (!dirty.effort) {
       $("brainEffort").replaceChildren(...efforts.map(e => el("option", { value: e.id }, e.name)));
       $("brainEffort").value = S.settings.brain_effort || "low";
     }
+    const position = Math.max(0, efforts.findIndex(e => e.id === $("brainEffort").value));
+    $("brainEffortRange").max = String(efforts.length - 1);
+    $("brainEffortRange").value = String(position);
+    $("brainEffortLabel").textContent = efforts[position].name;
     $("autoRecall").checked = S.settings.auto_recall;
   }
   renderCompaction();
@@ -288,6 +313,17 @@ function render(keepPersona) {
     owner.players = npc;
     renderPlayers();
   }
+  const other = S.other_impressions;
+  $("otherImpressionTitle").hidden = $("otherImpressions").hidden = !other;
+  if (other) {
+    $("otherImpressionTitle").textContent = other.npc + "의 대상 인상 · 읽기 전용";
+    $("otherImpressions").replaceChildren(...(other.players.length
+      ? other.players.map(entry => el("li", {}, el("strong", {}, entry.name), " — " + entry.note))
+      : [el("li", {}, "아직 저장한 인상이 없습니다.")]));
+  }
+  const links = S.search_links || [];
+  $("searchSection").hidden = !links.length;
+  $("searchLinks").replaceChildren(...links.map(entry => el("li", {}, el("strong", {}, entry.title), " — ", entry.url)));
   if (!dirty.notes) {
     notes = JSON.parse(JSON.stringify(S.notes));
     baseNotes = S.notes.map(n => n.text);
@@ -416,6 +452,13 @@ $("persona").oninput = () => { syncNameFromText(); countPersona(); };
 $("brainModel").onchange = () => { dirty.model = true; };
 $("sttHints").oninput = () => { dirty.hints = true; };
 $("brainEffort").onchange = () => { dirty.effort = true; };
+$("brainEffortRange").oninput = () => {
+  const effort = S.effort_options[Number($("brainEffortRange").value)];
+  $("brainEffort").value = effort.id;
+  $("brainEffortLabel").textContent = effort.name;
+  dirty.effort = true;
+};
+$("brainLock").onclick = () => save({ brain_unlocked: !S.brain_access.unlocked }, "모델 설정 잠금 상태를 바꿨습니다.");
 $("saveEffort").onclick = async () => {
   const value = $("brainEffort").value;
   if (await save({ settings: { brain_effort: value } }, "생각 깊이를 저장했습니다. 다음 대답부터 적용됩니다.") && $("brainEffort").value === value) {

@@ -435,12 +435,12 @@ class Store:
             data["settings"] = dict(self._smalltalk_from_data(data), **patch)
             owner._save(SMALLTALK_STATE, data)
 
-    def reserve_smalltalk_ai(self, draw: float) -> bool:
+    def reserve_smalltalk_ai(self, draw: float, *, forced=False) -> bool:
         owner = self.for_npc()
         with owner.lock:
             data = owner._load(SMALLTALK_STATE, {})
             settings = self._smalltalk_from_data(data)
-            if not settings["ai"] or draw >= settings["ratio"]:
+            if not settings["ai"] or (not forced and draw >= settings["ratio"]):
                 return False
             today = time.strftime("%Y-%m-%d")
             used = data.get("used", 0) if data.get("day") == today else 0
@@ -451,6 +451,28 @@ class Store:
             data.update(day=today, used=used + 1)
             owner._save(SMALLTALK_STATE, data)
             return True
+
+    def brain_options(self):
+        owner = self.for_npc()
+        with owner.lock:
+            shared = owner._load("shared_brain.json", {})
+        options = {}
+        for key, validate in VALIDATED_KEYS:
+            if key not in ("brain_model", "brain_effort"):
+                continue
+            try:
+                options[key] = validate(shared[key])
+            except (KeyError, ValueError):
+                options[key] = self.settings[key]
+        return options
+
+    def set_shared_brain(self, patch):
+        checked = {key: validate(patch[key]) for key, validate in VALIDATED_KEYS
+                   if key in ("brain_model", "brain_effort") and key in patch}
+        if checked:
+            owner = self.for_npc()
+            with owner.lock:
+                owner._save("shared_brain.json", dict(owner._load("shared_brain.json", {}), **checked))
 
     # ------------------------------------------------------------ speaker / impressions / notes
 
@@ -477,6 +499,12 @@ class Store:
         with self.lock:
             self._append_exchange({"role": "user", "content": "(다른 사람에게 한 말로 판단)"},
                                   '{"for_me":false}')
+
+    def record_npc_exchange(self, name, heard, said):
+        with self.lock:
+            self._append_exchange({"role": "user", "content": f"[상대 NPC {name}의 말] {heard}" if heard else
+                                   f"[NPC 대화 시작: 상대 NPC {name}]"},
+                                  json.dumps({"lines": {"ko": said}}, ensure_ascii=False))
 
     def after_reply(self, name: str, user_text: str, assistant_json: str, impression: str = "", memory_note: str = "", utterance=None) -> dict:
         """Called by the AI after a good reply: store the exchange and merge what it wants to remember."""

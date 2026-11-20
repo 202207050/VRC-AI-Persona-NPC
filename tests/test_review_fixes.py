@@ -338,8 +338,9 @@ def watcher_checks(tmp):
         ok(app.replies.empty() and rec.stops == stops, "the late release is ignored")
 
         # ---- ... and when the player leaves the world with jump held
+        presses, down_logs = rec.presses, len(tsv("PTT_DOWN"))
         add(path, down("kwonjun"))
-        wait_for(lambda: rec.presses >= 8 and len(tsv("PTT_DOWN")) == 8, "pressed again")
+        wait_for(lambda: rec.presses == presses + 1 and len(tsv("PTT_DOWN")) == down_logs + 1, "pressed again")
         add(path, join(OTHER))
         wait_for(lambda: rec.cancels == 2, "world change -> cancelled")
         ok(tsv("PTT_CANCEL") == ["too_long", "world_changed"] and itoa.pose == "stand",

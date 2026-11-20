@@ -13,7 +13,7 @@ function element() {
     replaceChildren(...items) { this.children = items; } };
 }
 
-async function setup({ legacy = false, modern = false } = {}) {
+async function setup({ legacy = false, modern = false, access } = {}) {
   const elements = new Map();
   const get = (id) => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); };
   const calls = [];
@@ -42,6 +42,13 @@ async function setup({ legacy = false, modern = false } = {}) {
         ranges: { compact_note_count: [5, 59], compact_note_chars: [200, 4800], compact_impression_chars: [100, 499], compact_minutes: [1, 1440] },
         last: { at: '2026-11-19 20:10', ok: true, error: '', notes_before: { count: 52, chars: 3120 }, notes_after: { count: 21, chars: 1480 },
                 impressions: [{ name: 'Alice', before: 450, after: 190 }], usage: { in: 4000, out: 2000 }, cost_usd: 0.0014 } };
+    }
+  }
+  if (access) {
+    for (const state of Object.values(states)) {
+      state.brain_access = access;
+      state.other_impressions = { npc: '다른 NPC', players: [{ name: 'Alice', note: '<읽기 전용>' }] };
+      state.search_links = [{ title: '네이버', url: 'https://www.naver.com/' }];
     }
   }
   let delay = null, fail = false;
@@ -244,6 +251,26 @@ test('effort and recall are saved for the selected NPC', async () => {
   t.get('autoRecall').checked = false;
   await t.get('autoRecall').onchange();
   assert.deepEqual(t.calls.at(-1).body, { npc: 'kwonjun', settings: { auto_recall: false } });
+});
+
+test('new model access controls, read-only impressions and local search URLs render', async () => {
+  const locked = await setup({ modern: true, access: { editor: false, unlocked: false, can_edit: false } });
+  assert.equal(locked.get('brainLock').hidden, true);
+  assert.equal(locked.get('brainModel').disabled, true);
+  assert.equal(locked.get('brainEffortRange').disabled, true);
+  assert.equal(locked.get('otherImpressionTitle').textContent, '다른 NPC의 대상 인상 · 읽기 전용');
+  assert.match(locked.get('otherImpressions').children[0].children[1], /<읽기 전용>/);
+  assert.equal(locked.get('searchLinks').children[0].children[2], 'https://www.naver.com/');
+
+  const editor = await setup({ modern: true, access: { editor: true, unlocked: false, can_edit: true } });
+  assert.equal(editor.get('brainLock').hidden, false);
+  editor.get('brainEffortRange').value = '3';
+  editor.get('brainEffortRange').oninput();
+  assert.equal(editor.get('brainEffortLabel').textContent, 'xhigh');
+  await editor.get('saveEffort').onclick();
+  assert.equal(editor.calls.at(-1).body.settings.brain_effort, 'xhigh');
+  await editor.get('brainLock').onclick();
+  assert.equal(editor.calls.at(-1).body.brain_unlocked, true);
 });
 
 test('address filtering defaults on and can be disabled for the selected NPC', async () => {
