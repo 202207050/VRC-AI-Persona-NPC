@@ -9,3 +9,13 @@ __pycache__/
 *.pyc
 voice_log.tsv
 clips/
+
+# personal data made by the settings page: impressions of players, memory notes, kept conversation,
+# and this run's settings address (with its token)
+data/
+
+# other run-time output
+logs/
+*.log
+recordings/
+*.tmp

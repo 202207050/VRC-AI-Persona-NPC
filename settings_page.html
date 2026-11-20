@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPC 설정</title>
+<style>
+  :root { --bg:#f5f4f1; --card:#fff; --ink:#22242a; --sub:#6a6f7a; --line:#dddbd5; --accent:#3f6fd8; --danger:#c0453c; --ok:#2e8b57; --soft:#eef2fb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17181c; --card:#212329; --ink:#e8e8ea; --sub:#9a9fab; --line:#383b44; --accent:#7ea2f5; --danger:#ef7b72; --ok:#6fcf97; --soft:#2a3040; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.6 "Malgun Gothic","맑은 고딕",system-ui,sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:20px 16px 80px; }
+  h1 { font-size:22px; margin:8px 0 2px; }
+  h2 { font-size:18px; margin:0 0 4px; }
+  h3 { font-size:15px; margin:18px 0 6px; }
+  p.sub, .sub { color:var(--sub); font-size:13.5px; margin:2px 0 10px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-top:16px; }
+  label { display:block; font-weight:600; margin:10px 0 4px; }
+  label.check { display:flex; gap:8px; align-items:flex-start; font-weight:400; margin:8px 0; }
+  label.check input { margin-top:5px; }
+  input[type=number] { width:130px; padding:6px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+  input[type=text], textarea { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+  textarea { resize:vertical; }
+  #persona { min-height:330px; font-family:Consolas,"D2Coding","Malgun Gothic",monospace; font-size:14px; }
+  button { font:inherit; padding:7px 14px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.del { color:var(--danger); padding:4px 10px; font-size:13px; flex:none; }
+  .row { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+  .item { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:8px 0; }
+  .item .head { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .item .name { font-weight:700; }
+  .tag { font-size:12px; padding:1px 8px; border-radius:99px; background:var(--soft); color:var(--sub); white-space:nowrap; }
+  .note-row { display:flex; gap:8px; align-items:center; margin:6px 0; }
+  .talk { border-left:3px solid var(--line); padding:2px 10px; margin:8px 0; display:flex; gap:8px; align-items:flex-start; }
+  .talk div { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .talk .who { color:var(--sub); font-size:12.5px; }
+  details { margin-top:12px; }
+  summary { cursor:pointer; color:var(--accent); }
+  pre { white-space:pre-wrap; overflow-wrap:anywhere; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:10px; font:13px/1.55 Consolas,"D2Coding","Malgun Gothic",monospace; max-height:420px; overflow:auto; }
+  .count { color:var(--sub); font-size:12.5px; margin-left:auto; }
+  .empty { color:var(--sub); font-size:14px; padding:6px 0; }
+  select { font:inherit; max-width:100%; padding:6px; color:var(--ink); background:var(--bg); }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin:10px 0; }
+  th, td { text-align:left; padding:6px; border-bottom:1px solid var(--line); }
+  #toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 18px; border-radius:99px; opacity:0; transition:opacity .2s; pointer-events:none; max-width:90vw; }
+  #toast.show { opacity:.95; }
+  #toast.bad { background:var(--danger); color:#fff; }
+</style>
+</head>
+<body>
+<main id="main">
+  <h1>NPC 설정 <span class="tag" id="aiTag"></span></h1>
+  <label>설정할 NPC: <select id="npcSelect"><option value="kwonjun">kwonjun</option><option value="itoa">ITOAR</option></select></label>
+  <p class="sub">글을 고친 뒤에는 그 칸의 <b>저장</b> 버튼을 눌러야 파일에 적힙니다(체크 상자는 바꾸면 바로 저장). NPC의 <b>다음 대답부터</b> 적용되고, 앱을 다시 켤 필요가 없습니다.</p>
+
+  <section>
+    <h2>대답 모델 · 닉네임 인식</h2>
+    <p class="sub" id="voiceVersion" hidden>이 기능은 업데이트된 음성 앱을 다음에 시작할 때 사용할 수 있습니다.</p>
+    <label for="brainModel">이 NPC의 대답 모델</label>
+    <select id="brainModel" disabled></select>
+    <div class="row"><button class="primary" id="saveModel" disabled>모델 저장</button></div>
+    <p class="sub">기본은 Haiku 5.5입니다. 저장하면 다음 대답부터 적용됩니다. 이미 만들고 있는 대답은 기존 모델로 마칩니다. AI 꺼짐·가짜 AI 모드에서는 선택만 저장합니다.</p>
+    <p class="sub">프롬프트 캐시는 모델별입니다. 다른 모델로 바꾸면 기존 모델의 캐시를 공유하지 않고 새 모델의 캐시를 만듭니다.</p>
+    <table>
+      <caption>대답 1회 예시 비용 (USD)</caption>
+      <thead><tr><th scope="col">모델</th><th scope="col">캐시 생성</th><th scope="col">캐시 재사용</th></tr></thead>
+      <tbody id="modelCosts"></tbody>
+    </table>
+    <p class="sub">고정 입력 3,000 + 나머지 입력 1,000 + 출력 200토큰, API 호출 1회, 5분 캐시 가정입니다. 실제 청구액이 아니며 추가 thinking·검색·재시도·세금은 제외합니다. Opus는 thinking을 끌 수 없어 추가 출력 비용과 시간이 들 수 있습니다. Haiku 입력 10만 토큰 초과는 다른 요금입니다. <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching" target="_blank" rel="noreferrer">요금 출처</a> (2026-11-19 확인).</p>
+    <label for="brainEffort">이 NPC의 생각 깊이</label>
+    <select id="brainEffort" disabled></select>
+    <div class="row"><button class="primary" id="saveEffort" disabled>생각 깊이 저장</button></div>
+    <p class="sub">기본은 <b>낮음</b>입니다(지금까지와 같음, 가장 빠름). 높일수록 대답하기 전에 더 오래 생각해서 <b>느려지고 비용이 늘어납니다</b>. 보통 이상에서는 모든 모델이 대답 전에 생각을 하고, 매우 높음·최대는 몇십 초가 걸릴 수 있습니다. Haiku·Sonnet·Opus 5.5 모두 다섯 단계를 쓸 수 있습니다.</p>
+    <label class="check"><input type="checkbox" id="autoRecall" disabled><span><b>필요할 때 깊이 떠올리기</b> <span class="sub">(예전 일을 묻는 질문에는 NPC가 "잠깐 생각해 볼게"라고 한 뒤, 기억 전체를 보고 더 깊이 생각해서 다시 대답합니다. 그 대답만 몇 초 더 걸립니다. 켜 두면 평소 대답에는 지금 한 말과 관련 있는 메모만 보내서 비용을 줄입니다. 끄면 항상 메모 전체를 보냅니다)</span></span></label>
+    <label for="sttHints">이 NPC에게 말할 때의 닉네임 힌트</label>
+    <textarea id="sttHints" rows="5" maxlength="2048" spellcheck="false" placeholder="404 -> 사공사&#10;ITOAR"></textarea>
+    <p class="sub">한 줄에 이름 하나 또는 <b>인식된 말 -&gt; 바꿀 말</b>. 예: <code>404 -&gt; 사공사</code>는 인식 결과의 404를 사공사로 바꿉니다. 반대를 원하면 <code>사공사 -&gt; 404</code>로 적으세요. 양쪽 이름을 Whisper 어휘 힌트로도 전달합니다. 최대 32줄, 양쪽 각각 80자, 전체 2,048자. 비워 저장하면 해제됩니다.</p>
+    <div class="row"><button class="primary" id="saveHints" disabled>닉네임 힌트 저장</button></div>
+  </section>
+
+  <section>
+    <h2>두 NPC의 잡담</h2>
+    <p class="sub">두 NPC에 공통으로 적용됩니다. AI가 꺼져 있거나 일일 한도에 도달하면 준비된 대사를 사용합니다.</p>
+    <label class="check"><input type="checkbox" id="smalltalkAI" disabled> AI 잡담 사용</label>
+    <label for="smalltalkRatio">AI 생성 비율 (%)</label>
+    <input type="number" id="smalltalkRatio" min="0" max="100" step="any" disabled>
+    <label for="smalltalkCap">AI 생성 일일 한도 (회)</label>
+    <input type="number" id="smalltalkCap" min="0" step="1" disabled>
+    <div class="row"><button class="primary" id="saveSmalltalk" disabled>잡담 설정 저장</button></div>
+  </section>
+
+  <section>
+    <h2>1. 성격</h2>
+    <p class="sub">NPC가 어떤 아이인지 적은 글입니다(<span id="personaFile"></span>). 이름, 말투, 좋아하는 것, 주변에 있는 물건을 자유롭게 고쳐 보세요.</p>
+    <label for="npcName">이름</label>
+    <input type="text" id="npcName" maxlength="40">
+    <p class="sub">이름을 바꾸면 아래 글의 "이름:" 줄도 함께 바뀝니다.</p>
+    <label for="persona">성격 글</label>
+    <textarea id="persona" spellcheck="false"></textarea>
+    <div class="row">
+      <button class="primary" id="savePersona">성격 저장</button>
+      <button id="resetPersona">고치기 전으로 되돌리기</button>
+      <span class="count" id="personaCount"></span>
+    </div>
+    <p class="sub">글이 길수록 대답 한 번의 비용이 조금씩 늘어납니다.</p>
+    <details>
+      <summary>고정된 대답 규칙 보기 (읽기 전용)</summary>
+      <p class="sub">"한국어로 짧게" 같은 기본 규칙입니다. 바꾸려면 <code>persona_ai.py</code>의 RULES를 고쳐야 합니다.</p>
+      <pre id="rules"></pre>
+    </details>
+    <details>
+      <summary>AI에게 실제로 보내는 글 전체 보기 (읽기 전용)</summary>
+      <p class="sub">규칙 + 성격 + 오래 기억하는 것 + 지금 말하는 사람에 대한 인상을 합친 글입니다. NPC는 대답할 때마다 이 글과 최근 대화를 함께 봅니다.</p>
+      <pre id="preview"></pre>
+    </details>
+  </section>
+
+  <section>
+    <h2>2. 플레이어를 어떻게 생각하는지</h2>
+    <p class="sub">NPC가 사람마다 적어 두는 짧은 인상 메모입니다. 대화하다가 인상이 달라지면 NPC가 스스로 고쳐 씁니다. 직접 고쳐도 됩니다.</p>
+    <p class="sub" id="speakerInfo"></p>
+    <label class="check"><input type="checkbox" id="autoUpdate"><span>NPC가 대화하면서 <b>스스로</b> 인상과 기억을 고쳐 쓰기 <span class="sub">(끄면 여기 적힌 내용만 쓰고, NPC는 아무것도 바꾸지 않습니다)</span></span></label>
+    <div id="players"></div>
+    <div class="row">
+      <input type="text" id="newPlayer" placeholder="새로 적을 사람의 VRChat 이름" maxlength="40" style="max-width:280px">
+      <button id="addPlayer">사람 추가</button>
+    </div>
+    <div class="row"><button class="primary" id="savePlayers">인상 저장</button></div>
+  </section>
+
+  <section>
+    <h2>3. 기억</h2>
+    <h3>오래 기억하는 것</h3>
+    <p class="sub">앱을 껐다 켜도 남는 메모입니다(최대 <span id="maxNotes"></span>개). NPC가 "기억해 둘 만하다"고 느낀 것을 스스로 적기도 합니다. 많이 쌓이면 아래 "기억 자동 정리"가 합쳐서 줄이고, 정리를 꺼 둔 채 가득 차면 NPC가 적은 것 중 가장 오래된 것부터 지워집니다.</p>
+    <div id="notes"></div>
+    <div class="row">
+      <button id="addNote">메모 추가</button>
+      <button class="primary" id="saveNotes">기억 저장</button>
+      <span class="count" id="notesCount"></span>
+    </div>
+
+    <h3>기억 자동 정리</h3>
+    <p class="sub">메모가 많이 쌓이면 NPC가 대답을 마친 뒤에 조용히 한 번 정리합니다. 겹치는 내용은 합치고 사소한 것은 빼서 절반쯤으로 줄이며, 이름·취향·약속 같은 사실은 남깁니다. 대답 속도에는 영향이 없고, 한 번에 약 0.002달러(2~3원) 안팎입니다(Haiku 5.5 사용).</p>
+    <p class="sub" id="compactVersion" hidden>이 기능은 업데이트된 음성 앱을 다음에 시작할 때 사용할 수 있습니다.</p>
+    <label class="check"><input type="checkbox" id="compactOn" disabled> 기억 자동 정리 사용</label>
+    <label for="compactCount">메모가 이 개수보다 많으면 정리 (개)</label>
+    <input type="number" id="compactCount" step="1" disabled>
+    <label for="compactChars">또는 메모 글자 수 합계가 이보다 많으면 정리 (자)</label>
+    <input type="number" id="compactChars" step="1" disabled>
+    <label for="compactImpression">한 사람의 인상 메모가 이보다 길면 줄이기 (자)</label>
+    <input type="number" id="compactImpression" step="1" disabled>
+    <label for="compactMinutes">정리 간격: NPC마다 이 시간에 한 번까지만 (분)</label>
+    <input type="number" id="compactMinutes" step="1" disabled>
+    <label class="check"><input type="checkbox" id="compactUser" disabled><span>내가 적은 메모도 줄이기 <span class="sub">(끄면 "내가 적음" 메모는 한 글자도 바꾸지 않습니다. 잠근 인상도 건드리지 않습니다)</span></span></label>
+    <div class="row">
+      <button class="primary" id="saveCompact" disabled>정리 설정 저장</button>
+      <button id="compactRun" disabled>지금 정리</button>
+      <button id="compactUndo" disabled>되돌리기</button>
+    </div>
+    <p class="sub" id="compactStatus"></p>
+
+    <h3>최근 대화</h3>
+    <p class="sub">NPC가 지금 떠올리고 있는 최근 대화입니다(최대 <span id="maxHistory"></span>번 주고받은 것까지). 이상한 대화는 지워서 잊게 할 수 있습니다.</p>
+    <label class="check"><input type="checkbox" id="keepHistory"><span>앱을 껐다 켜도 최근 대화 이어가기 <span class="sub">(끄면 지금처럼 앱을 다시 켤 때 처음부터 시작합니다)</span></span></label>
+    <div id="history"></div>
+    <div class="row">
+      <button id="refresh">새로 고침</button>
+      <button class="del" id="clearHistory">최근 대화 모두 잊기</button>
+    </div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+const NAME_RE = /^([ \t]*[-*]?[ \t]*이름[ \t]*[:：][ \t]*)(.+?)[ \t]*$/m;
+const $ = id => document.getElementById(id);
+let S = null;            // last state from the app
+let npc = "kwonjun";
+let switching = false;
+let players = {};        // working copies (edited on screen, sent on save)
+let notes = [];
+let basePlayers = {};    // what the app had when each working copy was taken: sent along on save, so the app
+let baseNotes = [];      // keeps whatever the NPC wrote in the meantime instead of replacing the whole list
+let owner = { players: "", notes: "" };   // which NPC each working copy belongs to
+const CLEAN = { players: false, notes: false, model: false, effort: false, hints: false, smalltalk: false, compact: false };
+const COMPACT_NUMBERS = { compactCount: "compact_note_count", compactChars: "compact_note_chars",
+                          compactImpression: "compact_impression_chars", compactMinutes: "compact_minutes" };
+const COMPACT_IDS = ["compactOn", "compactUser", "saveCompact", ...Object.keys(COMPACT_NUMBERS)];
+let dirty = { ...CLEAN };
+
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  Object.assign(e, props || {});
+  for (const k of kids) e.append(k);      // text is always added as text, never as HTML
+  return e;
+}
+
+function toast(msg, bad) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "show" + (bad ? " bad" : "");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.className = "", bad ? 5000 : 2200);
+}
+
+async function call(method, path, body) {
+  const selected = npc;
+  if (method === "GET") path += "?npc=" + encodeURIComponent(selected);
+  if (body) body = { ...body, npc: selected };
+  const opt = { method, headers: { "X-W04-Token": TOKEN }, cache: "no-store" };
+  if (body) { opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+  let res;
+  try { res = await fetch(path, opt); }
+  catch (e) { throw new Error("앱에 연결하지 못했습니다. 앱이 켜져 있는지 확인해 주세요."); }
+  if (res.status === 403) throw new Error("이 주소는 더 이상 쓸 수 없습니다. 앱을 다시 켰다면 새 주소로 열어 주세요.");
+  const data = await res.json();
+  if (selected !== npc) throw new Error("NPC 선택이 바뀌었습니다. 다시 시도해 주세요.");
+  if (!res.ok) throw new Error(data.error || "저장하지 못했습니다.");
+  return data;
+}
+
+async function load(keepEdits) {
+  S = await call("GET", "/api/state");
+  render(keepEdits);
+}
+
+async function save(body, msg) {
+  if (switching) return false;
+  try {
+    S = await call("POST", "/api/save", body);
+    render(true);
+    toast(msg || "저장했습니다. 다음 대답부터 적용됩니다.");
+    return true;
+  } catch (e) { toast(e.message, true); return false; }
+}
+
+function render(keepPersona) {
+  $("aiTag").textContent = S.ai ? "답하는 쪽: " + S.ai : "AI 꺼짐 (따라 말하기)";
+  $("personaFile").textContent = S.persona_file;
+  $("rules").textContent = S.rules;
+  $("preview").textContent = S.system_preview;
+  $("maxNotes").textContent = S.limits.notes;
+  $("maxHistory").textContent = S.limits.history;
+  $("persona").maxLength = S.limits.persona;
+  if (!keepPersona) { $("persona").value = S.persona; syncNameFromText(); }
+  countPersona();
+  $("autoUpdate").checked = S.settings.auto_update;
+  $("keepHistory").checked = S.settings.keep_history;
+  const supported = Array.isArray(S.model_options) && S.model_options.length > 0;
+  $("voiceVersion").hidden = supported;
+  for (const id of ["brainModel", "sttHints", "saveModel", "saveHints"]) $(id).disabled = !supported;
+  if (!dirty.model) {
+    $("brainModel").replaceChildren(...(S.model_options || []).map(m => el("option", { value: m.id }, m.name)));
+    $("brainModel").value = S.settings.brain_model || "claude-haiku-5-5";
+  }
+  if (!dirty.hints) $("sttHints").value = S.settings.stt_hints || "";
+  const efforts = Array.isArray(S.effort_options) ? S.effort_options : [];   // missing on an older running app
+  for (const id of ["brainEffort", "saveEffort", "autoRecall"]) $(id).disabled = !efforts.length;
+  if (efforts.length) {
+    if (!dirty.effort) {
+      $("brainEffort").replaceChildren(...efforts.map(e => el("option", { value: e.id }, e.name)));
+      $("brainEffort").value = S.settings.brain_effort || "low";
+    }
+    $("autoRecall").checked = S.settings.auto_recall;
+  }
+  renderCompaction();
+  const chat = S.smalltalk;
+  for (const id of ["smalltalkAI", "smalltalkRatio", "smalltalkCap", "saveSmalltalk"]) $(id).disabled = !chat;
+  if (chat && !dirty.smalltalk) {
+    $("smalltalkAI").checked = chat.ai;
+    $("smalltalkRatio").value = String(Number((100 * chat.ratio).toPrecision(15)));
+    $("smalltalkCap").value = String(chat.daily_cap);
+  }
+  $("modelCosts").replaceChildren(...(S.model_options || []).map(m => el("tr", {},
+    el("td", {}, m.name), el("td", {}, "$" + m.cold_usd.toFixed(6)), el("td", {}, "$" + m.warm_usd.toFixed(6)))));
+  $("speakerInfo").textContent = S.speaker_known
+    ? "지금 말하는 사람: " + S.speaker + " (VRChat 기록에서 읽은 내 이름)"
+    : "아직 VRChat 이름을 못 읽어서 \"" + S.speaker + "\"로 적습니다. VRChat에서 월드에 들어가면 이름이 자동으로 잡힙니다.";
+  if (!dirty.players) {
+    players = JSON.parse(JSON.stringify(S.players));
+    basePlayers = JSON.parse(JSON.stringify(S.players));
+    owner.players = npc;
+    renderPlayers();
+  }
+  if (!dirty.notes) {
+    notes = JSON.parse(JSON.stringify(S.notes));
+    baseNotes = S.notes.map(n => n.text);
+    owner.notes = npc;
+    renderNotes();
+  }
+  renderHistory();
+}
+
+function sizeText(v) { return "메모 " + v.count + "개 " + v.chars.toLocaleString("en-US") + "자"; }
+
+function renderCompaction() {
+  const fx = S.compaction;                 // missing on an older running app
+  $("compactVersion").hidden = !!fx;
+  for (const id of COMPACT_IDS) $(id).disabled = !fx;
+  $("compactRun").disabled = !fx || fx.running;
+  $("compactUndo").disabled = !fx || fx.running || !fx.backups.length;
+  if (!fx) { $("compactStatus").textContent = ""; return; }
+  if (!dirty.compact) {
+    $("compactOn").checked = S.settings.compact_on;
+    $("compactUser").checked = S.settings.compact_user_notes;
+    for (const [id, key] of Object.entries(COMPACT_NUMBERS)) {
+      $(id).value = String(S.settings[key]);
+      $(id).min = fx.ranges[key][0];
+      $(id).max = fx.ranges[key][1];
+    }
+  }
+  const lines = ["지금: " + sizeText(fx.now) + "."];
+  if (fx.running) lines.push("정리하는 중입니다. 잠시 뒤 '새로 고침'을 눌러 주세요.");
+  const last = fx.last;
+  if (!last) lines.push("아직 정리한 적이 없습니다.");
+  else if (last.ok) {
+    let t = "마지막 정리: " + last.at + " · " + sizeText(last.notes_before) + " → " + sizeText(last.notes_after);
+    for (const p of last.impressions) t += " · " + p.name + "의 인상 " + p.before + "자 → " + p.after + "자";
+    if (last.usage) t += " · 비용 약 $" + last.cost_usd.toFixed(4);
+    lines.push(t + (last.undone ? " (" + last.undone + "에 되돌림)" : "") + ".");
+  } else lines.push("마지막 시도: " + last.at + " · 바뀐 것 없음 (" + (last.error || "이유 모름") + ").");
+  lines.push(fx.backups.length ? "되돌릴 수 있는 정리 기록 " + fx.backups.length + "개 (가장 최근 것부터 하나씩 되돌립니다)."
+                               : "되돌릴 정리 기록이 없습니다.");
+  $("compactStatus").textContent = lines.join(" ");
+}
+
+function countPersona() {
+  $("personaCount").textContent = $("persona").value.length + " / " + S.limits.persona + "자";
+}
+function syncNameFromText() {
+  const m = NAME_RE.exec($("persona").value);
+  $("npcName").value = m ? m[2] : S.npc_name;
+}
+function syncTextFromName() {
+  const name = $("npcName").value.trim();
+  if (!name) return;
+  const t = $("persona");
+  t.value = NAME_RE.test(t.value) ? t.value.replace(NAME_RE, (all, pre) => pre + name)
+                                  : t.value.replace(/\s*$/, "") + "\n- 이름: " + name + "\n";
+  countPersona();
+}
+
+function renderPlayers() {
+  const box = $("players");
+  box.replaceChildren();
+  const names = Object.keys(players);
+  if (!names.length) box.append(el("div", { className: "empty" }, "아직 적어 둔 사람이 없습니다. NPC와 대화하면 자동으로 생깁니다."));
+  for (const name of names) {
+    const p = players[name];
+    const ta = el("textarea", { rows: 2, maxLength: S.limits.impression, value: p.note,
+                                placeholder: "예: 다정함. 야경을 좋아함. 나를 귀엽다고 함" });
+    const count = el("span", { className: "count" });
+    const showCount = () => { count.textContent = ta.value.length + " / " + S.limits.impression + "자"; };
+    ta.oninput = () => { p.note = ta.value; dirty.players = true; showCount(); };
+    showCount();
+    const lock = el("input", { type: "checkbox", checked: p.locked });
+    lock.onchange = () => { p.locked = lock.checked; dirty.players = true; };
+    const del = el("button", { className: "del" }, "지우기");
+    del.onclick = () => { delete players[name]; dirty.players = true; renderPlayers(); };
+    const head = el("div", { className: "head" }, el("span", { className: "name" }, name));
+    if (name === S.speaker) head.append(el("span", { className: "tag" }, "지금 말하는 사람"));
+    head.append(el("span", { className: "tag" }, "대화 " + (p.talks || 0) + "번"));
+    if (p.updated) head.append(el("span", { className: "tag" }, "고친 때 " + p.updated));
+    head.append(count, del);
+    box.append(el("div", { className: "item" }, head, ta,
+      el("label", { className: "check" }, lock, el("span", {}, "이 메모 잠그기 (NPC가 스스로 바꾸지 못하게)"))));
+  }
+}
+
+function renderNotes() {
+  const box = $("notes");
+  box.replaceChildren();
+  if (!notes.length) box.append(el("div", { className: "empty" }, "아직 기억해 둔 것이 없습니다."));
+  notes.forEach((n, i) => {
+    const inp = el("input", { type: "text", maxLength: S.limits.note, value: n.text, placeholder: "예: 손님은 공포 영화를 못 본다" });
+    const count = el("span", { className: "tag" });
+    const showCount = () => { count.textContent = inp.value.length + "/" + S.limits.note; };
+    inp.oninput = () => { n.text = inp.value; dirty.notes = true; showCount(); };
+    showCount();
+    const del = el("button", { className: "del" }, "지우기");
+    del.onclick = () => { notes.splice(i, 1); dirty.notes = true; renderNotes(); };
+    box.append(el("div", { className: "note-row" },
+      el("span", { className: "tag", title: n.at || "" }, n.by === "ai" ? "NPC가 적음" : "내가 적음"), inp, count, del));
+  });
+  $("addNote").disabled = notes.length >= S.limits.notes;
+  $("notesCount").textContent = "메모 " + notes.length + " / " + S.limits.notes + "개 · 한 줄 " + S.limits.note + "자까지";
+}
+
+function renderHistory() {
+  const box = $("history");
+  box.replaceChildren();
+  if (!S.history.length) box.append(el("div", { className: "empty" }, "아직 나눈 대화가 없습니다."));
+  S.history.forEach((h, i) => {
+    const del = el("button", { className: "del" }, "잊기");
+    del.onclick = () => {      // this one is stored at once, so it asks first
+      if (confirm(S.npc_name + "와 나눈 이 대화 한 건을 잊게 할까요? (되돌릴 수 없습니다)"))
+        save({ history_delete: i, history_heard: h.heard }, "그 대화를 잊었습니다.");
+    };
+    box.append(el("div", { className: "talk" },
+      el("div", {}, el("div", { className: "who" }, "나"), el("div", {}, h.heard),
+                    el("div", { className: "who" }, S.npc_name), el("div", {}, h.line)), del));
+  });
+}
+
+$("persona").oninput = () => { syncNameFromText(); countPersona(); };
+$("brainModel").onchange = () => { dirty.model = true; };
+$("sttHints").oninput = () => { dirty.hints = true; };
+$("brainEffort").onchange = () => { dirty.effort = true; };
+$("saveEffort").onclick = async () => {
+  const value = $("brainEffort").value;
+  if (await save({ settings: { brain_effort: value } }, "생각 깊이를 저장했습니다. 다음 대답부터 적용됩니다.") && $("brainEffort").value === value) {
+    dirty.effort = false; render(true);
+  }
+};
+$("autoRecall").onchange = () => save({ settings: { auto_recall: $("autoRecall").checked } },
+  $("autoRecall").checked ? "이제 필요할 때 기억을 깊이 떠올립니다." : "이제 항상 메모 전체를 보고 바로 대답합니다.");
+for (const id of ["compactOn", "compactUser", ...Object.keys(COMPACT_NUMBERS)]) {
+  $(id).oninput = () => { dirty.compact = true; };
+}
+$("saveCompact").onclick = async () => {
+  const settings = { compact_on: $("compactOn").checked, compact_user_notes: $("compactUser").checked };
+  for (const [id, key] of Object.entries(COMPACT_NUMBERS)) {
+    const [low, high] = S.compaction.ranges[key], v = Number($(id).value);
+    if (!$(id).value || !Number.isSafeInteger(v) || v < low || v > high)
+      return toast("정리 기준은 " + low.toLocaleString("en-US") + "~" + high.toLocaleString("en-US") + " 사이의 정수로 적어 주세요.", true);
+    settings[key] = v;
+  }
+  dirty.compact = false;
+  if (!await save({ settings }, "정리 설정을 저장했습니다.")) dirty.compact = true;
+};
+$("compactRun").onclick = () => save({ compact: "run" }, "정리를 시작했습니다. 몇 초 뒤 '새로 고침'을 눌러 주세요.");
+$("compactUndo").onclick = async () => {
+  if (!confirm("가장 최근 정리를 되돌릴까요? 정리 전의 메모로 돌아가고, 같은 정리가 다시 일어나지 않게 자동 정리를 꺼 둡니다. (이 화면에서 저장하지 않은 메모·인상 수정은 사라집니다)")) return;
+  const before = { ...dirty };
+  dirty.notes = dirty.players = dirty.compact = false;
+  if (!await save({ compact: "undo" }, "되돌렸습니다. 자동 정리는 꺼 두었습니다.")) dirty = before;
+};
+for (const id of ["smalltalkAI", "smalltalkRatio", "smalltalkCap"]) {
+  $(id).oninput = () => { dirty.smalltalk = true; };
+}
+$("saveSmalltalk").onclick = async () => {
+  const ai = $("smalltalkAI").checked;
+  const ratio = $("smalltalkRatio").value;
+  const cap = $("smalltalkCap").value;
+  if (!ratio || !(Number(ratio) >= 0 && Number(ratio) <= 100)) return toast("AI 비율은 0~100%로 적어 주세요.", true);
+  if (!cap || !Number.isSafeInteger(Number(cap)) || Number(cap) < 0) return toast("일일 한도는 0 이상의 정수로 적어 주세요.", true);
+  if (await save({ smalltalk: { ai, ratio: Number(ratio) / 100, daily_cap: Number(cap) } }) &&
+      $("smalltalkAI").checked === ai && $("smalltalkRatio").value === ratio && $("smalltalkCap").value === cap) {
+    dirty.smalltalk = false; render(true);
+  }
+};
+$("saveModel").onclick = async () => {
+  const value = $("brainModel").value;
+  if (await save({ settings: { brain_model: value } }) && $("brainModel").value === value) {
+    dirty.model = false; render(true);
+  }
+};
+$("saveHints").onclick = async () => {
+  const value = $("sttHints").value;
+  if (await save({ settings: { stt_hints: value } }, "닉네임 힌트를 저장했습니다. 다음 음성 인식부터 적용됩니다.") && $("sttHints").value === value) {
+    dirty.hints = false; render(true);
+  }
+};
+$("npcName").oninput = syncTextFromName;
+$("savePersona").onclick = async () => {
+  if (await save({ persona: $("persona").value }, "성격을 저장했습니다. 다음 대답부터 적용됩니다.")) {
+    $("persona").value = S.persona; syncNameFromText(); countPersona();
+  }
+};
+$("resetPersona").onclick = () => { $("persona").value = S.persona; syncNameFromText(); countPersona(); toast("마지막으로 저장한 글로 되돌렸습니다."); };
+$("autoUpdate").onchange = () => save({ settings: { auto_update: $("autoUpdate").checked } });
+$("keepHistory").onchange = () => save({ settings: { keep_history: $("keepHistory").checked } },
+  $("keepHistory").checked ? "이제 앱을 껐다 켜도 최근 대화를 이어갑니다." : "앱을 다시 켜면 대화를 처음부터 시작합니다.");
+$("addPlayer").onclick = () => {
+  const name = $("newPlayer").value.trim();
+  if (!name) return toast("이름을 적어 주세요.", true);
+  if (players[name]) return toast("이미 있는 이름입니다.", true);
+  players[name] = { note: "", locked: false, updated: "", talks: 0 };
+  $("newPlayer").value = "";
+  dirty.players = true;
+  renderPlayers();
+};
+async function saveList(kind, body, msg) {
+  if (owner[kind] !== npc) { toast("NPC를 바꾸는 중이었습니다. '새로 고침'을 누른 뒤 다시 해 주세요.", true); return false; }
+  const sent = JSON.stringify(body);
+  if (!await save(body, msg)) return false;     // failed: the draft and its "not saved yet" mark stay
+  const now = kind === "notes" ? { notes: notes.filter(n => n.text.trim()), notes_base: baseNotes }
+                               : { players, players_base: basePlayers };
+  if (JSON.stringify(now) === sent) { dirty[kind] = false; render(true); }   // nothing typed meanwhile
+  return true;
+}
+$("savePlayers").onclick = () => saveList("players", { players, players_base: basePlayers }, "인상을 저장했습니다. 다음 대답부터 적용됩니다.");
+$("addNote").onclick = () => { notes.push({ text: "", by: "user", at: "" }); dirty.notes = true; renderNotes(); };
+$("saveNotes").onclick = () => saveList("notes", { notes: notes.filter(n => n.text.trim()), notes_base: baseNotes }, "기억을 저장했습니다. 다음 대답부터 적용됩니다.");
+$("refresh").onclick = () => load(true).then(() => toast("새로 불러왔습니다."), e => toast(e.message, true));
+$("clearHistory").onclick = () => {
+  if (confirm(S.npc_name + "와 나눈 최근 대화를 모두 잊게 할까요? 되돌릴 수 없습니다. (오래 기억하는 것과 인상은 그대로 남습니다)"))
+    save({ history_clear: true }, "최근 대화를 모두 잊었습니다.");
+};
+
+$("npcSelect").onchange = async () => {
+  const previous = npc;
+  const unsaved = Object.values(dirty).some(Boolean) || (S && $("persona").value !== S.persona);
+  if (unsaved && !confirm((S ? S.npc_name : previous) + "에 저장하지 않은 수정이 있습니다. 버리고 다른 NPC로 바꿀까요?")) {
+    $("npcSelect").value = previous;
+    return;
+  }
+  npc = $("npcSelect").value;
+  switching = true;
+  $("npcSelect").disabled = true;
+  $("main").inert = true;                 // nothing can be typed into the old NPC's boxes while the new one loads
+  const before = { ...dirty };
+  try {
+    const next = await call("GET", "/api/state");
+    S = next;
+    dirty = { ...CLEAN };                 // only now: the old drafts are replaced together with the state
+    render(false);
+  }
+  catch (e) { npc = previous; dirty = before; $("npcSelect").value = previous; toast(e.message, true); }
+  finally { switching = false; $("npcSelect").disabled = false; $("main").inert = false; }
+};
+load(false).catch(e => toast(e.message, true));
+</script>
+</body>
+</html>

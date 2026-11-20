@@ -2,7 +2,6 @@
 rem VRC AI Persona NPC - start the companion app. Close this window to stop.
 rem   run.cmd --list         list microphones
 rem   run.cmd --device 3     use microphone #3 (or set MIC_DEVICE in .env)
-rem   run.cmd --ai sonnet    answer with Claude Sonnet instead of Haiku
 chcp 65001 >nul
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
