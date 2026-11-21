@@ -39,8 +39,8 @@ def vad_checks():
         for invalid in ("bad", "nan", "inf", "0", "-1", "15"):
             os.environ["W04_END_SILENCE_S"] = invalid
             ok(app.end_silence_from_env() == 1.3, f"invalid silence {invalid} falls back")
-    ok(app.is_fragment("응!") and app.is_fragment("시식을") and app.is_fragment("창가에 앉아서"),
-       "short cries and unfinished speech can be continued")
+    ok(not app.is_fragment("응!") and app.is_fragment("시식을") and app.is_fragment("창가에 앉아서"),
+       "a short answer can close a turn, and unfinished speech can be continued")
     ok(not app.is_fragment("창가에 앉았어요") and not app.is_fragment("잊을 사람들?"), "sentence endings close a turn")
 
 
@@ -82,9 +82,9 @@ def gaze_checks(tmp):
         gaze.wait_for(lambda: len(gaze.tsv("REPLY")) == 3, "worker finished the laughter turn")
         tr.run = original_run
         original_reply = brain.reply
-        for pose, text, action in (("sit", "창가로 가", {"do": "move_to", "target": "window"}),
+        for index, (pose, text, action) in enumerate((("sit", "창가로 가", {"do": "move_to", "target": "window"}),
                                    ("lie", "따라와", {"do": "follow"}),
-                                   ("lie", "화면 130인치로 해 줘", {"do": "tv_size_set", "inches": 130})):
+                                   ("lie", "화면 130인치로 해 줘", {"do": "tv_size_set", "inches": 130}))):
             gaze.add(path, gaze.T + f"[W04AI] NPC_POSE npc=kwonjun pose={pose}\n")
             gaze.wait_for(lambda: store.pose == pose, "watcher saw the current pose")
             tr.text = text
@@ -93,6 +93,8 @@ def gaze_checks(tmp):
                 push(mic)
                 reply = app.replies.get(timeout=5)
             ok(reply["steps"] == persona_ai.clamp_steps([action]), f"{pose}: world receives the command {action['do']}")
+            # speech that starts while the worker is still closing the previous turn is dropped by design
+            gaze.wait_for(lambda: len(gaze.tsv("REPLY")) == 4 + index, "worker finished the command turn")
     finally:
         stop.set()
         watcher.join(timeout=3)

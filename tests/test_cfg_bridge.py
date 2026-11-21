@@ -52,7 +52,9 @@ def cfg_set(**req):
 
 
 CFG_OPEN = T + "[W04AI] CFG_OPEN utc=639306602829378126\n"
-PTT = T + "[W04AI] PTT_DOWN utc=1\n" + T + "[W04AI] PTT_UP held_ms=1500 utc=2\n"
+PTT_DOWN = T + "[W04AI] PTT_DOWN utc=1\n"
+PTT_UP = T + "[W04AI] PTT_UP held_ms=1500 utc=2\n"
+PTT = PTT_DOWN + PTT_UP
 
 
 def get(port, path, headers=None, timeout=10):
@@ -365,13 +367,14 @@ def watcher_checks(tmp):
 
         # ---- normal push-to-talk still goes to the AI
         tr.text = "안녕 반가워"
-        add(log_a, PTT)
-        for state in ("hearing", "thinking"):
-            status, raw = get(port, "/poll")
-            ok(status == 200 and json.loads(raw) == {"state": state, "speaker": "Tester One"},
-               f"push-to-talk sends {state} before the reply")
+        add(log_a, PTT_DOWN)
         status, raw = get(port, "/poll")
-        ok(json.loads(raw)["line"] == "응!" and brain.heard == ["안녕 반가워"], "normal turn: AI answers")
+        ok(status == 200 and json.loads(raw) == {"state": "hearing", "speaker": "Tester One"},
+           "push-to-talk can show hearing while it is held")
+        add(log_a, PTT_UP)
+        status, raw = get(port, "/poll")
+        ok(json.loads(raw)["line"] == "응!" and brain.heard == ["안녕 반가워"],
+           "normal turn: the next poll gets the answer without an extra thinking status")
 
         # ---- dictation: the next push-to-talk goes to the target, not to the AI
         add(log_a, cfg_set(op="dictate", target="note_add"))
@@ -398,9 +401,9 @@ def watcher_checks(tmp):
         add(log_a, PTT)
         get(port, "/poll")
         ok(store.players["Tester One"]["note"] == "다정하고 말이 많다" and len(brain.heard) == 1, "impression dictated")
-        add(log_a, PTT)
-        for state in ("hearing", "thinking"):
-            ok(json.loads(get(port, "/poll")[1])["state"] == state, "the turn after dictation reports progress")
+        add(log_a, PTT_DOWN)
+        ok(json.loads(get(port, "/poll")[1])["state"] == "hearing", "the turn after dictation reports hearing")
+        add(log_a, PTT_UP)
         ok(json.loads(get(port, "/poll")[1])["line"] == "응!" and len(brain.heard) == 2, "the turn after goes to the AI again")
 
         # ---- half-written line, then the rest

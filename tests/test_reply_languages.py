@@ -44,7 +44,7 @@ class ReplyLanguageTests(unittest.TestCase):
         echo = app.poll_output(app.make_reply("가" * 200, 0))
         self.assertEqual(set(echo["lines"]), {"ko", "en", "ja"})
         self.assertTrue(all(len(line) <= app.WORLD_MAX_LINE for line in echo["lines"].values()))
-        empty = app.make_empty_reply("note_add")
+        empty = app.make_empty_reply("note_add", 7)
         self.assertIs(app.poll_output(empty), empty)
 
     def test_search_interim_and_error_keep_all_languages(self):
@@ -67,6 +67,14 @@ class ReplyLanguageTests(unittest.TestCase):
             reply = self.brain.reply("영화 추천", global_mode=True)
         self.assertEqual(reply["lines"]["en"], "Want to watch a movie?")
         self.assertEqual(reply["lines"]["ja"], ai.UNAVAILABLE_TRANSLATION["ja"])
+
+    def test_translation_log_flags(self):
+        for lang, normal in (("en", "Hello!"), ("ja", "こんにちは！")):
+            with self.subTest(lang=lang):
+                self.assertEqual(app.translation_flag({}, lang), "0")
+                self.assertEqual(app.translation_flag({lang: ""}, lang), "0")
+                self.assertEqual(app.translation_flag({lang: normal}, lang), "1")
+                self.assertEqual(app.translation_flag({lang: ai.UNAVAILABLE_TRANSLATION[lang]}, lang), "fallback")
 
     def test_incomplete_ai_smalltalk_uses_translated_script(self):
         self.brain.smalltalk = Mock(return_value=[{"npc": "kwonjun", "line": "안녕"}, {"npc": "itoa", "line": "안녕!"}])

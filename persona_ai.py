@@ -11,6 +11,7 @@ Reply shape sent to the world (see README "월드 쪽 규칙"):
      "lines": {"ko": "..."}, "line": "..."}
 """
 import copy
+import hashlib
 import json
 import os
 import re
@@ -32,12 +33,12 @@ ENV_PATH = os.path.join(HERE, ".env")
 EMOTIONS = ["neutral", "happy", "sad", "angry", "surprised", "troubled", "shy"]
 BASE_ACTIONS = ["look_at", "move_to", "face", "gesture", "wait"]     # these use target / gesture
 POSE_ACTIONS = ["sit", "lie", "stand", "prone", "prone_tv"]
-COMMAND_ACTIONS = ["follow", "stop", "come", "go_sit", "keep_distance"]  # world: W04Commands
+COMMAND_ACTIONS = ["follow", "stop", "come", "go_sit", "keep_distance", "hug_release"]  # world: W04Commands
 TV_ACTIONS = ["tv_closer", "tv_farther", "tv_lower", "tv_raise", "tv_tilt_down", "tv_tilt_up",
               "tv_left", "tv_right", "tv_reset", "tv_closer_max", "tv_farther_max", "tv_stop", "tv_pause",
               "tv_seek", "tv_restart", "tv_resume", "tv_off", "tv_backlight",
               "tv_size_up", "tv_size_down", "tv_size_max", "tv_size_min", "tv_size_set", "tv_replay"]
-ACTIONS = BASE_ACTIONS + POSE_ACTIONS + COMMAND_ACTIONS + TV_ACTIONS + ["emote", "outfit"]
+ACTIONS = BASE_ACTIONS + POSE_ACTIONS + COMMAND_ACTIONS + TV_ACTIONS + ["emote", "outfit", "mirror", "night_mode"]
 TARGETS = ["speaker", "sofa", "tv", "window", "bridge_view", "none"]
 GO_SIT_TARGETS = ["none", "other", "long", "single"]
 OUTFIT_TARGETS = {
@@ -114,6 +115,9 @@ VOICE_ERROR = ("음… 미안, 잠깐 멍했어. 다시 말해 줄래?",
                "Sorry, I zoned out for a second. Can you say that again?", "ごめん、ちょっとぼーっとしてた。もう一度言ってくれる？")
 SEARCH_ERROR = ("미안, 지금은 검색이 잘 안 되네. 조금 있다가 다시 물어봐 줄래?",
                 "Sorry, the search isn't working right now. Can you ask again later?", "ごめん、今は検索がうまくいかない。少ししたらまた聞いてくれる？")
+SEARCH_OFF_LINES = ("그건 지금 찾아볼 수가 없어. 검색이 꺼져 있거든.",
+                    "I can't look that up right now; search is turned off.",
+                    "今は検索がオフだから調べられないよ。")
 DISTANCE_REFUSAL = ("0.6m에서 12m 사이 거리만 맞출 수 있어.",
                     "I can only match distances from 0.6 to 12 meters.",
                     "合わせられる距離は0.6mから12mまでだよ。")
@@ -162,6 +166,7 @@ SELF_LABELS = {
     "sit": "소파에 앉기", "lie": "눕기", "stand": "일어서기",
     "prone": "소파에 엎드리기", "prone_tv": "소파에 엎드려 TV 쪽 보기",
     "follow": "따라다니기", "stop": "멈추기", "come": "부르면 오기", "go_sit": "소파에 가서 앉기",
+    "hug_release": "안고 있는 걸 풀기",
     "keep_distance": "말한 사람과 요청한 거리 맞추기",
     "tv_closer": "가까이", "tv_farther": "멀리", "tv_lower": "아래", "tv_raise": "위",
     "tv_tilt_down": "아래로 기울이기", "tv_tilt_up": "위로 기울이기",
@@ -171,6 +176,7 @@ SELF_LABELS = {
     "tv_resume": "영상 재개", "tv_off": "영상 끄기", "tv_backlight": "백라이트 밝기", "tv_size_up": "화면 10인치 키우기", "tv_size_down": "화면 10인치 줄이기",
     "tv_size_max": "화면 최대 크기", "tv_size_min": "화면 최소 크기", "tv_size_set": "지정한 인치로 화면 크기 조절",
     "emote": "표정 바꾸기", "outfit": "옷 메뉴 토글 켜고 끄기",
+    "mirror": "거울 켜고 끄기", "night_mode": "나이트 모드 밝기",
     "speaker": "말한 사람", "sofa": "소파", "tv": "TV", "window": "창가", "bridge_view": "다리가 보이는 창가",
     "wave": "손 흔들기", "nod": "끄덕이기", "shake_head": "고개 젓기", "shrug": "으쓱",
     "point": "가리키기", "think": "턱 괴기", "clap": "박수",
@@ -333,6 +339,7 @@ RULES = f"""너는 VRChat 월드에 있는 NPC다. 아래 성격 설정대로 �
 대답 규칙:
 - 대사(lines.ko)는 항상 한국어로만 쓴다. 1~2문장, {MAX_LINE_CHARS}자 이내. 말풍선에 한 글자씩 찍히므로 짧을수록 좋다.
 - 이모지, 괄호나 별표로 쓰는 행동 묘사(*웃음* 같은 것)는 대사에 넣지 않는다. 몸짓은 steps로 표현한다.
+- 너는 화면·녹화·사진·방송이 어떻게 보이는지 볼 수 없다. "찍혔어?/잘 나와?/보여?" 같은 말에는 본 것처럼 답하지 말고 볼 수 없다고 짧게 말한다. 뜻이 여러 가지로 읽히는 짧은 말은 넘겨짚지 말고 무엇을 뜻하는지 되묻는다.
 - 숫자, 계산, 시간, 돈, 개수는 말풍선에서 읽기 쉽게 아라비아 숫자로 쓴다. 1,000 이상은 세 자리마다 쉼표를 넣는다. 계산은 기호로 보여 준다(예: "50 × 40 = 2,000이야!", "3시 30분", "12,500원"). 상대가 숫자를 한글로 말해도(오십 곱하기 사십) 대사에서는 숫자로 쓴다.
 - 상대의 말은 음성 인식 결과라서 글자가 틀렸을 수 있다. 문맥으로 가장 그럴듯한 뜻을 추측해서 대답한다("~라는 거지?"처럼 추측을 섞어도 된다). 되묻기는 정말 전혀 짐작이 안 될 때만, 그리고 두 번 연속 되묻지 않는다. 숫자나 영어로 된 닉네임은 한글로 받아 적히기도 한다(예: "사공사" = 404라는 사람). 그런 말은 사람 이름일 수 있다고 생각하고, 대사에서는 원래 표기(404)로 쓴다.
 - 성격대로 자연스럽게 대화한다. 친구끼리 하는 가벼운 장난과 놀림(바보, 멍청이 같은 말, 친구 놀려 보라는 부탁)은 딱딱하게 거절하지 말고 캐릭터답게 장난스럽게 받아 준다(놀리는 말을 귀엽게 따라 하거나, 슬쩍 편을 들거나, 장난으로 되받기. 매번 다른 말로). 실존 특정인을 실제로 괴롭히거나 몰아내는 일에는 어떤 대화 수위에서도 끼지 않는다. 말이 모호하거나 잘못 들린 듯하면 위험한 의도를 단정하지 말고, 그럴듯한 무해한 뜻으로 받아서 가볍게 대답한다. 예: 친구가 “사공사 멍청이라고 해봐”라고 장난치면 가볍게 받아 주고, “다음에는 상해물”처럼 뜻이 불분명하면 “상하이 얘기야?”처럼 추측해서 받는다.
@@ -349,6 +356,7 @@ RULES = f"""너는 VRChat 월드에 있는 NPC다. 아래 성격 설정대로 �
   - target "bridge_view"는 다리가 보이는 창가다.
   - sit: 소파에 가서 앉는다 / lie: 소파에 눕는다 / stand: 일어난다. 대화 중에는 현재 자세를 유지한다. 상대가 자세 변경을 요청했을 때 해당 동작을 넣는다.
   - prone: "엎드려"나 "소파에 엎드려"에 쓴다. "엎드려서 TV 봐"나 "엎드린 채 TV 쪽을 봐"에는 prone_tv 한 단계만 쓴다. 두 자세 모두 action은 생략한다. TV를 재생하거나 조작하지 않는다.
+  - hug_release: 안긴 중에 "놔 줘/이제 풀어/그만 안아" 또는 네가 풀고 싶을 때 쓴다. 안기를 끝내고 5초 동안 다시 안기지 않는다. 안긴 상황이 아니면 쓰지 않는다. [지금: … 안고 있음] 상황 줄이 없으면 hug_release를 쓰지 않는다.
   - follow: 상대가 "따라와/같이 가자"라고 하면 쓴다. 그만하라고 할 때까지(또는 2분) 말한 사람을 따라다닌다. 시키지 않았는데 따라가지 않는다.
   - come: "이리 와/여기로 와"에 쓴다. 말한 사람 앞까지 한 번 걸어온다.
   - keep_distance: 말한 사람과의 목표 거리를 한 번 맞춘다. "2m로 와봐"는 action: "200", "1미터 떨어져"는 action: "100", "더 가까이 와"처럼 숫자가 없으면 action: "{MIN_DISTANCE_CM}"이다. 미터나 센티미터로 말한 거리(예: "일 미터", "육십 센티")를 단위 없는 정수 센티미터 문자열로 쓴다. 요청값이 0.6m 미만이거나 12m를 초과하면 반올림하거나 범위에 끼워 맞추지 말고 steps를 비우고 "0.6m에서 12m 사이 거리만 맞출 수 있어."라고 답한다.
@@ -362,7 +370,13 @@ RULES = f"""너는 VRChat 월드에 있는 NPC다. 아래 성격 설정대로 �
   - tv_replay: 재생 기록이 제공되고 손님이 그중 하나를 다시 틀어 달라고 했을 때만 action에 해당 항목의 key를 그대로 넣는다. 새 주소나 key를 지어내지 않는다. 여러 영상이 가능하면 제목을 선택지로 되묻는다. 다시 보기와 일시정지 해제는 구분한다.
   - tv_restart: “영상 처음부터”, tv_resume: “영상 이어서/다시 재생”.
   - tv_backlight: “백라이트 35%”는 percent: 35를 넣고, 밝게/어둡게/켜기/끄기는 action을 각각 brighter/dimmer/on/off로 넣는다. 화면 크기나 영상 재생과 구분한다.
-  - TV 명령은 대답당 하나를 마지막에 넣고 짧게 요청을 받아들인다. 실제 성공 여부는 월드가 알려 준다.
+  - "N%로/N퍼센트로"는 목표값이라 percent: N. "N% 낮춰/올려/만큼/정도 더"는 변화량이다. [TV 현재: … 백라이트 X%] 줄이 있으면 X∓N을 0~100으로 맞춰 percent에 넣고 "X%에서 Y%로 낮출게"처럼 말한다. 그 줄에 백라이트 값이 없으면 steps를 비우고 "지금 밝기를 몰라서, 몇 %로 맞출지 말해 줘."라고 한다. 숫자 없는 "밝게/어둡게"는 brighter/dimmer를 쓴다.
+  - 밝기 대상이 TV 백라이트인지 나이트 모드(월드 전체 밝기)인지 말에서 드러나지 않으면("밝기 15%로", "세트 밝기") 바꾸지 말고 choices로 "TV 백라이트" / "나이트 모드"를 되묻는다. 직전 대화가 분명히 한쪽 이야기였으면 그쪽으로 한다.
+  - TV 현재·최소·최대 인치는 [TV 현재: …] 줄에 있을 때만 숫자로 답한다. 없으면 모른다고 한다.
+  - mirror: 거울 켜기·끄기·화질. action은 off/lq/hq/cutout(그냥 "켜"는 lq), target·gesture는 "none". 말한 사람 화면의 거울만 바뀐다. "전원/모두"라고 해도 그 사람 거울만 바꾸고 그렇다고 짧게 말한다.
+  - night_mode: 나이트(야간) 모드 밝기. action은 0~100 정수 문자열(예 "30"). 말한 사람 화면에만 적용된다.
+    "N% 낮춰/올려"처럼 변화량이면 지금 값을 알 수 없으니 steps를 비우고 몇 %로 맞출지 되묻는다.
+  - TV 명령은 대답당 최대 두 개를 요청 순서대로 마지막에 넣고 짧게 요청을 받아들인다. 실제 성공 여부는 월드가 알려 준다.
   - go_sit 외의 자세·거리·따라가기·중단·TV 명령은 target과 gesture를 "none"으로 둔다. TV 명령을 move_to와 섞지 않는다.
 """
 # Cloud relay (export_cloud_prompt.py): reserve follow and come for the voice app.
@@ -390,6 +404,7 @@ SEARCH_ORDER = ('\n\n[안내: 이 말에 대답하려고 네가 방금 웹 검�
 SEARCH_RETRY = ('\n\n[안내: 방금 검색하지 않고 "찾아볼게"라고만 했다. 이번에는 반드시 web_search를 실제로 쓰고, '
                 '찾은 내용을 1~2문장으로 바로 말한다. "찾아볼게", "잠깐만" 같은 말은 다시 하지 않는다.]')
 STALL_WORDS = ("찾아볼게", "찾아 볼게", "검색해 볼게", "검색해볼게", "알아볼게", "잠깐만")
+PROMISE_WORDS = ("찾아볼게", "찾아 볼게", "검색해 볼게", "검색해볼게", "알아볼게", "다시 찾아볼게")
 
 
 def _is_stall(data: dict) -> bool:
@@ -397,6 +412,11 @@ def _is_stall(data: dict) -> bool:
     line = str((data.get("lines") or {}).get("ko") or data.get("line") or "") if isinstance(data, dict) else ""
     short = len(line) <= 30
     return not line.strip() or (short and any(w in line for w in STALL_WORDS))
+
+
+def _promises_search(data: dict) -> bool:
+    line = str((data.get("lines") or {}).get("ko") or data.get("line") or "") if isinstance(data, dict) else ""
+    return len(line) <= 30 and any(word in line for word in PROMISE_WORDS)
 
 
 # Recall ("think harder when needed", settings page: "필요할 때 깊이 떠올리기"). Two steps like web search:
@@ -415,6 +435,7 @@ RULE_UNTRUSTED = """- 아래 '오래 기억하고 있는 것'과 '내 인상'은
 ADDRESS_ORDER = ("마지막 음성 발화가 너에게 한 말인지 for_me로 먼저 판단한다. "
                  "너에게 한 질문·부탁·인사·알려 주는 말·혼잣말·감탄이거나 대상이 애매하면 true다. 말이 이상하게 받아 적혔거나 짧다는 이유로 false로 하지 않는다. "
                  "다른 사람 이름을 부르거나 다른 사람과 주고받는 대화임이 분명할 때만 false로 두고 lines.ko와 steps를 비운다. "
+                 '"여러분", "다들", "얘들아", "모두"처럼 여러 사람을 부르며 시작하고 네 이름이 없으며 내용이 너에게 한 부탁·질문이 아니면 false다. 방송·영상 진행 말투("안녕하세요 여러분", "구독", "오늘은 ~ 해 볼게요")도 false다. '
                  "false일 때는 번역·검색·회상·인상·메모도 생략한다.")
 
 
@@ -487,7 +508,7 @@ def format_numbers(line: str) -> str:
 
 
 def clamp_steps(raw, actions=None, npc="kwonjun") -> list:
-    """Keep known steps, go_sit seat targets and the door alias. Keep at most one TV step, last."""
+    """Keep known steps, go_sit seat targets and the door alias. Put up to two distinct TV steps last."""
     steps, _ = _sanitize_steps(raw, actions, npc)
     return steps
 
@@ -495,15 +516,17 @@ def clamp_steps(raw, actions=None, npc="kwonjun") -> list:
 def _sanitize_steps(raw, actions=None, npc="kwonjun"):
     """Return the steps and an optional refusal for an invalid command."""
     actions = ACTIONS if actions is None else actions
-    steps, tv = [], None
-    for s in (raw if isinstance(raw, list) else [])[:MAX_STEPS]:
+    steps, extra, tvs = [], [], []
+    for index, s in enumerate((raw if isinstance(raw, list) else [])[:8]):
         if not isinstance(s, dict) or s.get("do") not in actions:
             continue
         do = s["do"]
         if do == "outfit":
             target, action = s.get("target"), s.get("action")
             if target not in OUTFIT_TARGETS[npc] or action not in OUTFIT_ACTIONS:
-                return [], OUTFIT_REFUSAL
+                if index < MAX_STEPS:
+                    return [], OUTFIT_REFUSAL
+                continue
             step = {"do": do, "target": target, "action": action}
         elif do == "emote":
             emotion = s.get("emotion")
@@ -524,8 +547,20 @@ def _sanitize_steps(raw, actions=None, npc="kwonjun"):
                 cm = s.get("action")
                 if (not isinstance(cm, str) or not re.fullmatch(r"[1-9][0-9]{1,3}", cm)
                         or not MIN_DISTANCE_CM <= int(cm) <= MAX_DISTANCE_CM):
-                    return [], DISTANCE_REFUSAL
+                    if index < MAX_STEPS:
+                        return [], DISTANCE_REFUSAL
+                    continue
                 step["action"] = cm
+            elif do == "mirror":
+                action = s.get("action")
+                if action not in ("off", "lq", "hq", "cutout"):
+                    continue
+                step["action"] = action
+            elif do == "night_mode":
+                action = s.get("action")
+                if not isinstance(action, str) or not re.fullmatch(r"\d{1,3}", action) or not 0 <= int(action) <= 100:
+                    continue
+                step["action"] = action
             elif do == "tv_size_set":
                 inches = s.get("inches")
                 if type(inches) not in (float, int) or not 0 < inches < float("inf"):
@@ -550,15 +585,62 @@ def _sanitize_steps(raw, actions=None, npc="kwonjun"):
                 else:
                     continue
             if do in TV_ACTIONS:
-                tv = tv or step
+                if len(tvs) < 2 and all(tv["do"] != do for tv in tvs):
+                    tvs.append(step)
                 continue
         else:
             target = s.get("target") if isinstance(s.get("target"), str) else None   # a list / object is not hashable
             target = TARGET_ALIASES.get(target, target)
             step = {"do": do, "target": target if target in TARGETS else "speaker",
                     "gesture": s.get("gesture") if s.get("gesture") in GESTURES else "none"}
-        steps.append(step)
-    return steps + ([tv] if tv else []), None
+        (steps if index < MAX_STEPS else extra).append(step)
+    if tvs:
+        steps = (steps + extra)[:MAX_STEPS - len(tvs)]
+    return steps + tvs, None
+
+
+TV_PHRASES = (
+    ("tv_reset", r"초기화|원래대로|원위치|원상태", r"초기화|원래대로|원위치|원상태"),
+    ("tv_closer_max", r"(최대한|끝까지|최대로)\s*(가까이|당겨|앞으로)",
+     r"(최대한|끝까지|최대로)\s*(가까이\s*)?(당기|당길|당겨|앞으로)"),
+    ("tv_farther_max", r"(최대한|끝까지)\s*(밀어|멀리|벽\s*쪽)", r"(최대한|끝까지)\s*(밀|멀리|벽)"),
+    ("tv_size_max", r"(사이즈|크기|화면)\s*(을|를)?\s*최대|최대\s*(크기|사이즈)",
+     r"최대로\s*키우|최대로\s*키울|최대\s*(크기|사이즈)"),
+    ("tv_size_min", r"(사이즈|크기|화면)\s*(을|를)?\s*최소|최소\s*(크기|사이즈)",
+     r"최소로\s*줄이|최소로\s*줄일|최소\s*(크기|사이즈)"),
+)
+
+
+TV_WORD = re.compile(r"TV|tv|티비|티브이|텔레비전|테레비|화면|스크린")
+
+
+def fill_missing_tv(steps, heard, line) -> list:
+    """Restore TV steps named in both the request and the reply, up to the step limits.
+
+    Only when the request is about the TV (it names the TV or already has a TV step): "원래대로" alone
+    is also said about poses and outfits."""
+    if not TV_WORD.search(heard) and not any(step["do"] in TV_ACTIONS for step in steps):
+        return steps
+    matches = []
+    for action, heard_pattern, line_pattern in TV_PHRASES:
+        match = re.search(heard_pattern, heard)
+        if match:
+            matches.append((match.start(), action, line_pattern))
+    matches.sort(key=lambda match: match[0])
+    order = {action: index for index, (_, action, _) in enumerate(matches)}
+    normal = [step for step in steps if step["do"] not in TV_ACTIONS]
+    tvs = [step for step in steps if step["do"] in TV_ACTIONS]
+    present = {step["do"] for step in tvs}
+    for _, action, line_pattern in matches:
+        if len(tvs) >= 2:
+            break
+        if action not in present and re.search(line_pattern, line):
+            if len(normal) + len(tvs) >= MAX_STEPS:
+                normal.pop()
+            tvs.append({"do": action, "target": "none", "gesture": "none"})
+    if all(step["do"] in order for step in tvs):
+        tvs.sort(key=lambda step: order[step["do"]])
+    return normal + tvs
 
 
 def _reply_line(value: str, prior_raw: str) -> str:
@@ -746,8 +828,8 @@ class Brain:
 - 인상이나 발화 기록에 주인 이름 뒤 '(나)'가 붙으면 앱 사용자라는 뜻이다. NPC 이름과 같아도 다른 사람이다. '(나)'는 표시용이므로 실제 이름을 말할 때 떼고 말한다.
 - 동작: {actions}. 시선·이동 대상: {targets}. 몸짓: {gestures}. 표정: {emotions}.
 - PC 주인 마이크로 받은 음성에 스피커 소리가 섞일 수 있다. 다른 사람의 목소리를 이름으로 식별할 수는 없다.
-- TV: {tv}. 답당 한 동작이다. 팔과 화면 크기는 조종기가 비어 있을 때, 영상 조작은 요청자에게 재생 제어 권한이 있을 때 가능하다. 백라이트 밝기는 인스턴스에 공유된다.
-- {search} 검색 출처의 주소는 음성 앱 설정에서 볼 수 있다. TV 영상 재생은 월드 기록에서 이전 영상을 다시 틀 때 가능하다. 음성 앱은 거울과 나이트 모드 밝기 명령도 처리한다. 화면 보기, 브라우저 조작과 월드 밖 행동은 못 한다. 모델과 제공사는 비밀이다.
+- TV: {tv}. 답당 최대 두 동작이다(요청 순서대로). 팔과 화면 크기는 조종기가 비어 있을 때, 영상 조작은 요청자에게 재생 제어 권한이 있을 때 가능하다. 백라이트 밝기는 인스턴스에 공유된다.
+- {search} 검색 출처의 주소는 음성 앱 설정에서 볼 수 있다. TV 영상 재생은 월드 기록에서 이전 영상을 다시 틀 때 가능하다. 화면 보기, 브라우저 조작과 월드 밖 행동은 못 한다. 모델과 제공사는 비밀이다.
 - 최근 대화 {MAX_HISTORY}번, 상대 인상, 취향·약속 메모({MAX_NOTE_CHARS}자씩 최대 {persona_store.MAX_NOTES}개)를 기억한다. 인상과 메모는 저장된다. 최근 대화는 저장을 켜야 재시작 후 남는다. 오래된 메모는 정리되거나 잊힐 수 있다.
 """
 
@@ -769,7 +851,7 @@ class Brain:
     def _request_kwargs(self, heard: str, speaker: str, query: str = None, model: str = None,
                         recall: bool = False, global_mode: bool = False, content_level: int = 0,
                         utterance=None, check_address: bool = False, map_rows=None,
-                        allow_map_lookup=False, map_retry=False, tv_rows=None, clarification=None) -> dict:
+                        allow_map_lookup=False, map_retry=False, tv_rows=None, clarification=None, touch_now=None) -> dict:
         """query None: the normal reply call (may ask for a search or a recall). query given: the searching
         call. recall=True: the careful second call of a recall turn (higher effort, every memo)."""
         st = self.store
@@ -779,7 +861,10 @@ class Brain:
         schema = reply_schema(auto and not st.impression(speaker)["locked"], auto,
                               search=first and self.search_on(), recall=first and self.recall_on(),
                               check_address=check_address, map_lookup=first and allow_map_lookup)
-        said = heard + (RECALL_ORDER if recall else "" if query is None else SEARCH_ORDER.format(query=query))
+        said = heard
+        if touch_now:
+            said += "\n\n" + touch_now + " (월드가 알려 준 실제 상황이다. 부정하지 않는다.)"
+        said += (RECALL_ORDER if recall else "" if query is None else SEARCH_ORDER.format(query=query))
         system = self.system_blocks(speaker, model, None if recall else heard, map_rows)
         if map_retry:
             system.append({"type": "text", "text": ("조회가 끝났다. 맵 안내를 참고해 처음 질문에 답한다."
@@ -827,11 +912,13 @@ class Brain:
             kw["max_tokens"] = max(kw["max_tokens"], 4096)  # includes hidden thinking
         return kw
 
-    def _create(self, kw: dict):
+    def _create(self, kw: dict, send=None):
         """One API call. If the API refuses the web search tool version (400 naming it), switch to the other
         version, remember it, and try once more."""
+        if send is None:
+            send = self.client.messages.create
         try:
-            return self.client.messages.create(**kw)
+            return send(**kw)
         except Exception as e:
             tools = kw.get("tools")
             if not tools or getattr(e, "status_code", None) != 400:
@@ -843,21 +930,48 @@ class Brain:
                 system = [*kw["system"], {"type": "text", "text":
                     "검색이 끝나면 JSON 객체를 써. 대사는 lines.ko에 넣고 Global ON이면 lines.en과 lines.ja도 채워. "
                     "주소는 대사에 쓰지 마."}]
-                return self._create(dict(kw, output_config=without_format, system=system))
+                return self._create(dict(kw, output_config=without_format, system=system), send)
             if "web_search" not in error:
                 raise
             other = next(t for t in SEARCH_TOOL_TYPES if t != self.search_tool_type)
             self.search_tool_type = other
             kw["tools"] = [dict(tools[0], type=other)]
-            return self.client.messages.create(**kw)
+            return send(**kw)
 
     def _ask(self, kw: dict, total: dict) -> dict:
         """Runs one turn to its end -> the reply JSON; token and search counts are added to total. A
         server-tool turn can stop with "pause_turn"; it is continued by sending the paused assistant content
         back, with no new user message."""
+        def fingerprint(value):
+            payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:8]
+
+        def send(**request):
+            output = request.get("output_config", {})
+            fixed = [block["text"] for block in request["system"] if "cache_control" in block]
+            tools = [tool["name"] for tool in request.get("tools", [])]
+            thinking = request.get("thinking", {})
+            call = {"kind": total["kind"], "in": -1, "cache_read": -1, "cache_write": -1,
+                    "fp_system": fingerprint([fixed, tools, request["model"]]),
+                    "fp_schema": fingerprint(output.get("format", {}).get("schema")),
+                    "thinking": thinking.get("type", "-"), "effort": output.get("effort", "-")}
+            for key in sorted(thinking.keys() - {"type"}):
+                call["thinking"] += f"/{key}={thinking[key]}"
+            started = time.monotonic()
+            try:
+                response = self.client.messages.create(**request)
+                usage = response.usage
+                call.update({"in": usage.input_tokens or 0,
+                             "cache_read": getattr(usage, "cache_read_input_tokens", 0) or 0,
+                             "cache_write": getattr(usage, "cache_creation_input_tokens", 0) or 0})
+                return response
+            finally:
+                call["ms"] = round((time.monotonic() - started) * 1000)
+                total["calls"].append(call)
+
         previous = []
         for attempt in range(SEARCH_MAX_PAUSES + 1):
-            resp = self._create(kw)
+            resp = self._create(kw, send)
             u = resp.usage
             total["in"] += u.input_tokens or 0
             total["out"] += u.output_tokens or 0
@@ -947,7 +1061,7 @@ class Brain:
 
     def reply(self, heard: str, speaker: str = None, on_interim=None, global_mode: bool = False,
               content_level: int = 0, utterance=None, check_address: bool = False,
-              tv_rows=None, clarification=None) -> dict:
+              tv_rows=None, clarification=None, touch_now=None) -> dict:
         """Returns the world reply plus diagnostics: ai_ms, model, usage/error, remembered (what it noted),
         on a searching turn search_query / search_ms, and on a recall turn recall=True / recall_ms.
 
@@ -964,12 +1078,18 @@ class Brain:
             return dict(command_refusal(EXPOSURE_REFUSAL, global_mode), model=model, ai_ms=0)
         if UNSUPPORTED_OUTFIT_REQUEST.search(heard):
             return dict(command_refusal(OUTFIT_REFUSAL, global_mode), model=model, ai_ms=0)
-        info = {"model": model}
-        total = {"in": 0, "out": 0, "cache_read": 0, "cache_write": 0, "search": 0}
+        info = {"model": model, "calls": []}
+        total = {"in": 0, "out": 0, "cache_read": 0, "cache_write": 0, "search": 0, "calls": info["calls"]}
+
+        def ask(kind, kw):
+            total["kind"] = kind
+            return self._ask(kw, total)
         searching = self.search_on()
         entries = map_knowledge.load() if self.client is not None else []
         map_rows = map_knowledge.select(heard, entries)
         request_kwargs = self._request_kwargs
+        if touch_now:
+            request_kwargs = partial(request_kwargs, touch_now=touch_now)
         if tv_rows or clarification:
             request_kwargs = partial(request_kwargs, tv_rows=tv_rows, clarification=clarification)
         try:
@@ -982,10 +1102,10 @@ class Brain:
                                                    f"（模擬AI）「{heard[:20]}」って言ったね！"), global_mode)}
                 time.sleep(0.05)
             else:
-                data = self._ask(request_kwargs(
+                data = ask("first", request_kwargs(
                     heard, speaker, model=model, global_mode=global_mode,
                     content_level=content_level, utterance=utterance, check_address=check_address,
-                    map_rows=map_rows, allow_map_lookup=bool(entries) and not map_rows), total)
+                    map_rows=map_rows, allow_map_lookup=bool(entries) and not map_rows))
                 if check_address and data.get("for_me") is False:
                     try:
                         self.store.record_overheard()
@@ -997,13 +1117,20 @@ class Brain:
                 query = " ".join(str(data.pop("search", "") or "").split())[:MAX_QUERY_CHARS] if searching else ""
                 if searching and not query and re.search(r"링크\s*(?:를\s*)?(?:보여|찾아|알려|줘|주라)", heard):
                     query = " ".join(heard.split())[:MAX_QUERY_CHARS]
+                if searching and not query and data.get("recall") is not True and _promises_search(data):
+                    words = heard.split()
+                    if sum(map(len, words)) < 10:
+                        previous_user = next((m["content"] for m in reversed(self.store.history) if m["role"] == "user"), "")
+                        words = previous_user.split() + words
+                    query = " ".join(words)[:MAX_QUERY_CHARS]
+                    info["search_forced"] = True
                 recall = data.pop("recall", False) is True and self.recall_on() and not query
                 lookup = data.pop("map_lookup", None)
                 if entries and not map_rows and not query and not recall and isinstance(lookup, str) and lookup.strip():
                     map_rows = map_knowledge.select(lookup[:100], entries)
-                    data = self._ask(request_kwargs(
+                    data = ask("map", request_kwargs(
                         heard, speaker, model=model, global_mode=global_mode,
-                        content_level=content_level, utterance=utterance, map_rows=map_rows, map_retry=True), total)
+                        content_level=content_level, utterance=utterance, map_rows=map_rows, map_retry=True))
                     data.pop("map_lookup", None)
                 if (query or recall) and on_interim is not None:
                     try:
@@ -1020,9 +1147,9 @@ class Brain:
                     info["recall"] = True
                     t1 = time.time()
                     try:
-                        data = self._ask(request_kwargs(heard, speaker, model=model, recall=True,
+                        data = ask("recall", request_kwargs(heard, speaker, model=model, recall=True,
                                                               global_mode=global_mode, content_level=content_level,
-                                                              utterance=utterance, map_rows=map_rows), total)
+                                                               utterance=utterance, map_rows=map_rows))
                     finally:
                         info["recall_ms"] = round((time.time() - t1) * 1000)
                     data.pop("search", None)
@@ -1031,9 +1158,9 @@ class Brain:
                     info["search_query"] = query
                     t1 = time.time()
                     try:
-                        data = self._ask(request_kwargs(heard, speaker, query, model=model,
+                        data = ask("search", request_kwargs(heard, speaker, query, model=model,
                                                               global_mode=global_mode, content_level=content_level,
-                                                              utterance=utterance, map_rows=map_rows), total)
+                                                               utterance=utterance, map_rows=map_rows))
                         # Haiku sometimes answers the searching call with the stall line again and never
                         # searches (seen 2026-11-20: "서울 날씨" -> "잠깐만, 찾아볼게!" twice, then nothing).
                         # Retry once with a firmer order; if it still stalls, say so honestly.
@@ -1046,12 +1173,12 @@ class Brain:
                             if not th or th.get("type") == "disabled":  # forced tool use needs thinking off
                                 rkw["tool_choice"] = {"type": "any"}
                             try:
-                                data = self._ask(rkw, total)
+                                data = ask("retry", rkw)
                             except Exception:
                                 if "tool_choice" not in rkw:
                                     raise
                                 rkw.pop("tool_choice")
-                                data = self._ask(rkw, total)
+                                data = ask("retry", rkw)
                         if _is_stall(data):
                             raise RuntimeError("search stalled")
                     finally:
@@ -1070,8 +1197,12 @@ class Brain:
                     if isinstance(data.get("choices"), list):
                         data["choices"] = [search_links.hide_urls(value) if isinstance(value, str) else value
                                            for value in data["choices"]]
+                if not searching and _promises_search(data):
+                    data["lines"] = localized_lines(SEARCH_OFF_LINES, global_mode)
+                    data["line"] = data["lines"]["ko"]
             previous = next((m["utterance"] for m in reversed(self.store.history) if "utterance" in m), {})
             out = _clamp_reply(data, global_mode, previous.get("raw", ""), npc=self.store.npc)
+            out["steps"] = fill_missing_tv(out["steps"], heard, out["line"])
             keys = {row["key"] for row in (tv_rows or ()) if row["key"]}
             out["steps"] = [step for step in out["steps"]
                             if step["do"] != "tv_replay" or step.get("action") in keys]
@@ -1111,7 +1242,7 @@ class Brain:
                    "lines": localized_lines(text, global_mode), "line": msg}
         if self.client is not None:
             info["usage"] = " ".join(f"{k}={v}" for k, v in total.items()
-                                     if k != "links" and (k != "search" or searching))
+                                     if k not in ("links", "calls", "kind") and (k != "search" or searching))
             if searching:
                 info["searches"] = total["search"]
         info["ai_ms"] = round((time.time() - t0) * 1000)

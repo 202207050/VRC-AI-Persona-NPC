@@ -166,10 +166,41 @@ def clamp_steps_checks(_folder):
 
     tv = {"do": "tv_left", "target": "tv", "gesture": "wave"}
     raw = [tv, look, {"do": "tv_reset"}, walk]
-    assert persona_ai.clamp_steps(raw) == [look, {"do": "tv_left", "target": "none", "gesture": "none"}]
+    left = {"do": "tv_left", "target": "none", "gesture": "none"}
+    reset = {"do": "tv_reset", "target": "none", "gesture": "none"}
+    assert persona_ai.clamp_steps(raw) == [look, left, reset]
+    assert persona_ai.clamp_steps([tv, left]) == [left]
+    assert persona_ai.clamp_steps([tv, reset, {"do": "tv_raise"}]) == [left, reset]
     assert raw[0] == {"do": "tv_left", "target": "tv", "gesture": "wave"}
     at_limit = [None] * (persona_ai.MAX_STEPS - 1) + [look, walk]
     assert persona_ai.clamp_steps(at_limit) == [look], "The input window is applied before filtering"
+
+    assert persona_ai.clamp_steps([{"do": "mirror", "action": "hq"}, {"do": "night_mode", "action": "30"}]) == [
+        {"do": "mirror", "target": "none", "gesture": "none", "action": "hq"},
+        {"do": "night_mode", "target": "none", "gesture": "none", "action": "30"},
+    ]
+    assert persona_ai.clamp_steps([{"do": "mirror", "action": "bright"}, {"do": "night_mode", "action": "150"},
+                                   {"do": "night_mode", "action": "abc"}]) == []
+
+    closer = {"do": "tv_closer_max", "target": "none", "gesture": "none"}
+    size_max = {"do": "tv_size_max", "target": "none", "gesture": "none"}
+    fill = persona_ai.fill_missing_tv
+    heard = "TV 초기화하고 최대한 당겨줘"
+    said = "원래대로 돌리고 최대한 가까이 당길게!"
+    assert fill([reset], heard, said) == [reset, closer]
+    assert fill([closer], heard, said) == [reset, closer]
+    assert fill([closer, reset], heard, said) == [reset, closer]
+    assert fill([size_max], "TV 사이즈 최대로 하고 TV 최대한 당겨줘", "최대로 키우고 최대한 당길게!") == [size_max, closer]
+    assert fill([reset], heard, "원래대로 돌릴게!") == [reset]
+    assert fill([reset], "TV 초기화해줘", said) == [reset]
+    assert fill([closer], "TV 원상태로 돌리고 최대한 당겨줘", "원상태로 돌리고 최대한 가까이 당길게!") == [reset, closer]
+    assert fill([look, walk, reset], heard, said) == [look, reset, closer]
+    pause = {"do": "tv_pause", "target": "none", "gesture": "none"}
+    assert fill([pause, reset], "TV 일시정지하고 원래대로 돌려줘", "일시정지하고 원래대로 돌릴게!") == [pause, reset]
+    # "원래대로" about a pose or an outfit must not send the NPC to the TV
+    assert fill([], "자세 원래대로 해", "원래대로 설게!") == []
+    assert fill([look], "옷 원래대로 입어", "원래대로 입을게!") == [look]
+    assert fill([], "화면 원래대로 해줘", "원래대로 돌릴게!") == [reset]
 
 
 def clamp_reply_checks(_folder):

@@ -290,6 +290,24 @@ def gaze_checks(tmp):
         # ---- one turn at a time: speech during an answer is dropped, the next one is heard
         add(path, LISTEN_ON)
         wait_for(lambda: mic.tap is not None, "listening again")
+
+        # ---- a short OFF/ON to the same NPC keeps one in-progress utterance
+        tr.text = "같은 말 계속 들어 줘"
+        before = len(tr.clips)
+        off_count, on_count = len(tsv("LISTEN_OFF")), len(tsv("LISTEN_ON"))
+        original_tap = mic.tap
+        mic.push(np.concatenate([room(0.3), speech(0.8)]))
+        wait_for(mic.drained, "speech started before the short OFF")
+        add(path, T + "[W04AI] LISTEN_OFF npc=kwonjun reason=gaze ang=26 dist=3.7 held_ms=2100 utc=2\n")
+        wait_for(lambda: len(tsv("LISTEN_OFF")) == off_count + 1, "extended LISTEN_OFF seen")
+        time.sleep(0.5)
+        add(path, T + "[W04AI] LISTEN_ON npc=kwonjun ang=6 dist=1.4 resume_ms=500 utc=3\n")
+        wait_for(lambda: len(tsv("LISTEN_ON")) == on_count + 1, "same NPC resumed")
+        mic.push(np.concatenate([speech(0.8), room(1.4)]))
+        reply = app.replies.get(timeout=5)
+        ok(reply["heard"] == tr.text and mic.tap is original_tap and len(tr.clips) == before + 1
+           and tr.clips[-1] > 1.6 and no_reply(), "a 0.5 s OFF/ON keeps the whole utterance once")
+
         brain.gate.clear()
         tr.text = "첫 번째"
         mic.push(np.concatenate([room(0.6), speech(1.0), room(1.4)]))

@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 import time
+from unittest.mock import patch
 
 import numpy as np
 
@@ -70,7 +71,8 @@ def step_checks(tmp):
     out = persona_ai._clamp_reply({"steps": [{"do": "tv_left", "target": "tv", "gesture": "none"},
                                              {"do": "tv_raise", "target": "none", "gesture": "none"},
                                              {"do": "look_at", "target": "speaker", "gesture": "none"}], "lines": {"ko": "응"}})
-    ok([s["do"] for s in out["steps"]] == ["look_at", "tv_left"], "one tv step per reply, moved to the end")
+    ok([s["do"] for s in out["steps"]] == ["look_at", "tv_left", "tv_raise"],
+       "up to two tv steps per reply, in order, moved to the end")
     for name in ("tv_closer_max", "tv_farther_max", "tv_stop", "tv_pause",
                  "tv_size_up", "tv_size_down", "tv_size_max", "tv_size_min", "tv_restart", "tv_resume", "tv_off"):
         ok(name in enum["do"]["enum"] and persona_ai.clamp_steps([{"do": name}]) ==
@@ -104,7 +106,7 @@ def step_checks(tmp):
        "junk and unknown steps are dropped")
     rules = persona_ai.RULES
     for piece in ("- follow:", "시키지 않았는데 따라가지 않는다", "- come:", "- stop:", "- go_sit:", "tv_closer/tv_farther",
-                  "TV 명령은 대답당 하나를 마지막에 넣고", 'target과 gesture를 "none"으로 둔다', "sit: 소파에 가서 앉는다",
+                  "TV 명령은 대답당 최대 두 개를 요청 순서대로 마지막에 넣고", 'target과 gesture를 "none"으로 둔다', "sit: 소파에 가서 앉는다",
                   "대화 중에는 현재 자세를 유지한다", '"계속해"에는 새 이동·자세·TV 동작을 넣거나',
                   'target "bridge_view"는 다리가 보이는 창가다'):
         ok(piece in rules, f"RULES has: {piece}")
@@ -318,6 +320,25 @@ def watcher_checks(tmp):
            and itoa.players["Mikan Lover 404"]["note"] == persona_store.AFFECTION_PHRASES["pat"]
            and "Bad" not in store.players, "repeat is rate-limited, other NPC separate, unknown type ignored")
         ok([d.split("\t")[-1] for d in tsv("AFFECTION")] == ["noted=1", "noted=0", "noted=1"], "AFFECTION is logged")
+
+        who = "Mikan Lover 404"
+        def context_at(npc, at):
+            with patch.object(app.time, "monotonic", return_value=at):
+                return app.touch_context(npc)
+
+        pat = app.touch_now["itoa"]
+        ok(context_at("itoa", pat["at"] + 10) == f"[방금: {who}가 네 머리를 쓰다듬음]", "recent pat")
+        ok(context_at("itoa", pat["at"] + 16) is None and "itoa" not in app.touch_now, "pat expired")
+        hug = app.touch_now["kwonjun"]
+        ok(hug["type"] == "hug" and hug["by"] == who and hug["ended"] is None, "current hug recorded")
+        ok(context_at("kwonjun", hug["at"] + 40) == f"[지금: {who}가 너를 안고 있음]", "long hug stays current")
+        add(path, T + f"[W04AI] AFFECTION_END type=hug npc=kwonjun by={who}\n")
+        wait_for(lambda: hug["ended"] is not None, "hug end received")
+        ok(context_at("kwonjun", hug["ended"] + 10) == f"[방금: {who}가 너를 안았다가 놓음]", "recent release")
+        ok(context_at("kwonjun", hug["ended"] + 16) is None and "kwonjun" not in app.touch_now, "release expired")
+        add(path, T + f"[W04AI] AFFECTION type=hug npc=kwonjun by={who}\n")
+        wait_for(lambda: "kwonjun" in app.touch_now, "second hug received")
+        ok(context_at("kwonjun", app.touch_now["kwonjun"]["at"] + 91) is None, "missing end expires")
 
         # ---- NPC_POSE
         add(path, T + "[W04AI] NPC_POSE npc=itoa pose=sit\n")

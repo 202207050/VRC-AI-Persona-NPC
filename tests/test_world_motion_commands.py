@@ -60,6 +60,31 @@ class WorldMotionCommandsTest(unittest.TestCase):
                     else:
                         self.assertIn(heard if heard != "12m 떨어져" else "12m", request["system"][0]["text"])
 
+    def test_hug_release_with_live_context(self):
+        heard = "이제 놔 줘"
+        touch = "[지금: A가 너를 안고 있음]"
+        step = {"do": "hug_release", "target": "none", "gesture": "none"}
+        data = {"lines": {"ko": "응, 놓을게."}, "steps": [{"do": "hug_release"}]}
+        self.assertEqual(ai._clamp_reply(data)["steps"], [step])
+        commands = Path(__file__).resolve().parents[3] / "Assets/W04/Scripts/W04Commands.cs"
+        self.assertIn('if (doName == "hug_release") return CHugRelease;', commands.read_text(encoding="utf-8"))
+        self.assertIn("hug_release", ai.ACTIONS)
+        with tempfile.TemporaryDirectory() as folder:
+            brain = ai.Brain("fake", Store(folder, migrate_persona=False))
+            brain.client = Mock()
+            brain.client.messages.create.return_value = SimpleNamespace(
+                content=[SimpleNamespace(type="text", text=json.dumps(data))],
+                usage=SimpleNamespace(input_tokens=1, output_tokens=1), stop_reason="end_turn",
+            )
+            self.assertEqual(poll_output(brain.reply(heard, touch_now=touch))["steps"], [step])
+            said = brain.client.messages.create.call_args.kwargs["messages"][-1]["content"]
+            self.assertEqual(said, heard + "\n\n" + touch + " (월드가 알려 준 실제 상황이다. 부정하지 않는다.)")
+            for options in ({"query": "검색"}, {"recall": True}):
+                turn = brain._request_kwargs(heard, "A", touch_now=touch, **options)
+                self.assertTrue(turn["messages"][-1]["content"].startswith(said + "\n\n"))
+            self.assertEqual(brain.store.history[-2]["content"], heard)
+            self.assertNotIn(touch, str(brain.store.history))
+
     def test_seat_targets_are_specific_to_go_sit(self):
         for invalid in (None, "sofa", "unknown", ["long"]):
             with self.subTest(invalid=invalid):

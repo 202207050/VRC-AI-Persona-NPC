@@ -152,10 +152,25 @@ def main():
         r = brain.reply("긴 검색어")
         ok(len(r["search_query"]) == persona_ai.MAX_QUERY_CHARS and r["searches"] == 0 and r["line"] == "응",
            "query capped; a step 2 that did not search still answers (search=0)")
-        fake.queue += [wants("   ")]
+        fake.queue += [wants("   ", line="잠깐만 기다려 줘")]
         before = len(fake.requests)
-        ok(brain.reply("빈 검색어")["line"] == "잠깐만, 찾아볼게!" and len(fake.requests) == before + 1,
-           "blank search field = no search")
+        ok(brain.reply("빈 검색어")["line"] == "잠깐만 기다려 줘" and len(fake.requests) == before + 1,
+           "blank search field without a promise does not search")
+
+        heard = "서울 날씨랑 바르샤바 날씨 비교해줘"
+        fake.queue += [response([text(answer("잠깐만, 찾아볼게!"))]), response([*SEARCH, text(full)], searches=1)]
+        before = len(fake.requests)
+        r = brain.reply(heard)
+        ok(len(fake.requests) == before + 2 and r.get("search_forced") is True and r.get("search_query") == heard,
+           "short promise with no search field forces a second call using the heard words")
+        second = fake.requests[before + 1]
+        ok(persona_ai.SEARCH_ORDER.format(query=heard) in second["messages"][-1]["content"]
+           and second["tools"][0]["name"] == "web_search", "forced call has the search order and tool")
+
+        fake.queue += [response([text(answer("다시 찾아볼게!"))]), response([*SEARCH, text(full)], searches=1)]
+        r = brain.reply("다시 찾아봐")
+        ok(r.get("search_forced") is True and r.get("search_query") == f"{heard} 다시 찾아봐",
+           "short follow-up uses the previous user utterance in the forced query")
 
         # ---- pause_turn: the paused content is sent back as the assistant turn, usage adds up
         paused = [SEARCH[0]]
@@ -204,6 +219,12 @@ def main():
             ok("web_search" not in req["system"][0]["text"] and "search(" not in req["system"][0]["text"]
                and "지금은 웹 검색을 할 수 없다" in req["system"][0]["text"], "and the prompt says it cannot search")
             ok("search=" not in r["usage"] and "searches" not in r and r["line"] == "응", "usage string as before")
+            fake.queue.append(response([text(answer("잠깐만, 찾아볼게!"))]))
+            before = len(fake.requests)
+            r = brain.reply("서울 날씨 알려줘", global_mode=True)
+            ok(len(fake.requests) == before + 1 and r["line"] == persona_ai.SEARCH_OFF_LINES[0]
+               and r["lines"] == persona_ai.localized_lines(persona_ai.SEARCH_OFF_LINES),
+               "a search promise is replaced with a localized notice when search is off")
         finally:
             os.environ.pop("W04_WEB_SEARCH", None)
         ok(persona_ai.web_search_enabled(), "default is on")
