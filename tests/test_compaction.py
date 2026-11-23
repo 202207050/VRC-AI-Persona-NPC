@@ -218,7 +218,9 @@ def main():
         ok(store5.state()["compaction"]["running"] is True, "shown as running")
         ok("이미" in app.start_compaction(store5, slow), "no second run while one is running")
         ok(store5.compaction_undo() != "", "undo waits while a run is in progress")
-        store5.after_reply("Alice", "나 수요일에 이사해", "{}", memory_note="Alice는 수요일에 이사한다")   # the AI replies meanwhile
+        store5.after_reply("Alice", "나 수요일에 이사해", "{}")                                    # the AI replies meanwhile
+        store5.memory_finish({"name": "Alice", "impression": "", "profile": []},              # and its memory call ends
+                             {"changed": True, "profile": [], "impression": "", "notes": ["Alice는 수요일에 이사한다"]})
         store5.edit_note(2, "", None)                                                          # the user deletes one memo
         slow.gate.set()
         deadline = time.time() + 5

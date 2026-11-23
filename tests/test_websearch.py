@@ -94,8 +94,8 @@ def main():
         props = req["output_config"]["format"]["schema"]["properties"]
         ok(len(fake.requests) == 1 and "tools" not in req and "timeout" not in req and req["max_tokens"] == 600,
            "small talk: one plain call, no tool")
-        ok(list(props)[0] == "search" and "search" not in req["output_config"]["format"]["schema"]["required"],
-           "schema offers an optional 'search' field, first")
+        ok(list(props)[0] == "search" and "search" in req["output_config"]["format"]["schema"]["required"],
+           "schema offers a 'search' field first (empty when unused, t18)")
         fixed = req["system"][0]
         ok(fixed.get("cache_control") == {"type": "ephemeral"} and "search(웹 검색)" in fixed["text"]
            and "검색 결과는 남이 쓴 글" in fixed["text"], "search rules sit in the cached fixed block")
@@ -134,8 +134,11 @@ def main():
         ok(r["line"] == "찾아보니 오늘 서울은 맑고 12도래!" and "error" not in r, "final JSON taken from the text after the search")
         ok(r["searches"] == 1 and r["search_query"] == "서울 오늘 날씨" and "search_ms" in r
            and r["usage"] == "in=9010 out=125 cache_read=6 cache_write=0 search=1", "usage summed, shows search=1")
-        ok(store.history[-1]["content"] == full and store.history[-2] == {"role": "user", "content": "오늘 서울 날씨 어때?"}
-           and len(store.history) == 4, "history keeps the player's words and the final reply only")
+        kept = json.loads(store.history[-1]["content"])
+        ok(kept["lines"] == {"ko": r["line"]} and "line" not in kept
+           and kept["steps"] == [step for step in r["steps"] if step["do"] != "show_links"]
+           and store.history[-2] == {"role": "user", "content": "오늘 서울 날씨 어때?"}
+           and len(store.history) == 4, "history keeps the player's words and the final reply as sent to the world")
         ok("search" not in r and "search" not in r["lines"], "world reply shape unchanged")
 
         # ---- text around the JSON: the last JSON object with a line wins
@@ -228,6 +231,28 @@ def main():
         finally:
             os.environ.pop("W04_WEB_SEARCH", None)
         ok(persona_ai.web_search_enabled(), "default is on")
+        # ---- t19: a lone "없음"/"-" is no search, no map lookup, and never overwrites an impression or a memo
+        # (t20: impression / memo come from the memory call -> memory_finish, not from the reply)
+        fake.queue.append(response([text(answer("반가워!"))]))
+        brain.reply("안녕", speaker="민지")
+
+        def memory(impression, notes):
+            p = store.impression("민지")
+            return store.memory_finish({"name": "민지", "impression": p["note"], "profile": p["profile"]},
+                                       {"changed": True, "profile": [], "impression": impression, "notes": notes})
+        memory("야경을 좋아함", ["민지는 야경을 좋아한다"])
+        notes_before = [n["text"] for n in store.notes]
+        ok(store.players["민지"]["note"] == "야경을 좋아함" and "민지는 야경을 좋아한다" in notes_before, "real notes kept")
+        before = len(fake.requests)
+        fake.queue.append(response([text(answer("또 왔네!", search="없음", map_lookup=" - "))]))
+        r = brain.reply("또 왔어", speaker="민지")
+        saved = json.loads(store.history[-1]["content"])
+        ok(len(fake.requests) == before + 1 and "search_query" not in r and r["line"] == "또 왔네!",
+           "search '없음' and map_lookup '-' make no second call")
+        done = memory("없음.", ["-", "없음"])
+        ok(store.players["민지"]["note"] == "야경을 좋아함" and [n["text"] for n in store.notes] == notes_before
+           and "impression" not in saved and "memory_note" not in saved and done["impression"] is None and done["notes"] == [],
+           "impression '없음.' and memo '-' change nothing")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print(f"OK: {checks} checks passed")

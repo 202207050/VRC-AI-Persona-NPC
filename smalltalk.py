@@ -22,12 +22,24 @@ def requested(text):
     return DIALOG_REQUEST.search(text) is not None
 
 
+def _vocative(line, names, bare_start=False):
+    """True when one of names is used to call someone: '이토아, 들어 봐', '이토아야', '야 이토아'.
+    Plain mentions such as '이토아가 그러더라' or '이토아는 뭐 좋아해?' are not. bare_start: a name that
+    opens the sentence followed by a space ('이토아 이리 와') also counts."""
+    names = "|".join(re.escape(name) for name in sorted(set(filter(None, names)), key=len, reverse=True))
+    bare = r"|\s+" if bare_start else ""
+    start = rf"^\s*(?:야[ ,]+)?(?:{names})(?:(?:아|야|\s*씨)(?=\s|[,.!?…！？，]|$)|\s*[,，:!?！？]|${bare})"
+    inside = rf"[,.!?…，]\s*(?:야[ ,]+)?(?:{names})(?:(?:아|야|\s*씨)(?=\s|[,.!?…！？，]|$)|\s*[,，:!?！？]|$)"
+    return re.search(start + "|" + inside, line, re.IGNORECASE) is not None
+
+
 def addressed(line, other):
-    names = sorted({other.npc_name(), *REACTION_NAMES[other.npc]}, key=len, reverse=True)
-    names = "|".join(re.escape(name) for name in names if name)
-    # Vocatives are direct addresses. Plain mentions such as '이토아가 그러더라' are not.
-    return re.search(rf"(?:^|[,.!?…，]\s*)(?:야[ ,]+)?(?:{names})(?:(?:아|야|\s*씨)(?=\s|[,.!?…！？，]|$)|\s*[,，:!?！？]|$)",
-                     line, re.IGNORECASE) is not None
+    return _vocative(line, (other.npc_name(), *REACTION_NAMES[other.npc]))
+
+
+def called(text, names):
+    """A player's words call this NPC by name (not just mention it). See _vocative."""
+    return _vocative(text, names, bare_start=True)
 
 
 def parse_request(line: str):

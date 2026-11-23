@@ -44,16 +44,22 @@ def test_rules():
     for heard in ("토아리 먹자", "도토아", "이토록", "권준아"):
         assert not app.npc_named(heard, "itoa", "ITOAR"), heard
     assert app.npc_named("권 쥰아", "kwonjun", "kwonjun")
+    # t128 A11: only calling the other NPC skips this one; talking about it still gets an answer.
+    for heard in ("토아야, 이리 와", "이토아, 귤 먹자", "ITOAR 이리 와", "야 이토아", "그래. 이토아!"):
+        assert app.npc_called(heard, "itoa", "ITOAR"), heard
+    for heard in ("이토아는 뭐 좋아해?", "토아한테 귤 줘도 돼?", "이토아가 그러더라", "권준아 이토아 좋아해?"):
+        assert not app.npc_called(heard, "itoa", "ITOAR"), heard
     assert local_commands.world_command("나이트 모드 20% 낮춰 줘") is None
     assert local_commands.world_command("나이트 모드 20%만큼 올려 줘") is None
     assert local_commands.world_command("나이트 모드 20%") == {"do": "night_mode", "action": "20"}
     assert "여러분" in persona_ai.ADDRESS_ORDER
     for raw, expected in [
-        (["look_at", "gesture", "tv_reset", "tv_closer_max"], ["look_at", "tv_reset", "tv_closer_max"]),
-        (["look_at", "gesture", "look_at", "tv_left"], ["look_at", "gesture", "tv_left"]),
-        (["look_at", "gesture", "look_at", "wait"], ["look_at", "gesture", "look_at"]),
-        (["bad", "look_at", "bad", "gesture"], ["look_at"]),
-        (["look_at", "gesture", "look_at"] + ["bad"] * 4 + ["tv_left", "tv_reset"], ["look_at", "gesture", "tv_left"]),
+        # t128: four steps (the world's MaxSteps); commands still win over looks and gestures.
+        (["look_at", "gesture", "tv_reset", "tv_closer_max"], ["look_at", "gesture", "tv_reset", "tv_closer_max"]),
+        (["look_at", "gesture", "look_at", "tv_left"], ["look_at", "gesture", "look_at", "tv_left"]),
+        (["look_at", "gesture", "look_at", "wait", "look_at"], ["look_at", "gesture", "look_at", "wait"]),
+        (["bad", "look_at", "bad", "gesture"], ["look_at", "gesture"]),
+        (["look_at", "gesture", "look_at"] + ["bad"] * 4 + ["tv_left", "tv_reset"], ["look_at", "gesture", "tv_left", "tv_reset"]),
     ]:
         assert [row["do"] for row in persona_ai.clamp_steps([{"do": step} for step in raw])] == expected
 
@@ -74,7 +80,9 @@ def test_watch_and_calls():
             try:
                 assert "화면·녹화·사진·방송이 어떻게 보이는지 볼 수 없다" in brain.system_prompt()
                 assert "화면 보기, 브라우저 조작과 월드 밖 행동은 못 한다." in brain.system_prompt()
-                add(path, T + "[W04AI] TV_STATE inches=160 min=120 max=300 backlight=42\n" + LISTEN_ON)
+                add(path, T + "[W04AI] TV_STATE inches=160 min=120 max=300 backlight=42\n"
+                    + T + "[W04AI] CMD_RESULT npc=kwonjun cmd=tv_closer_max ok=1 reason=done\n"
+                    + T + "[W04AI] CMD_RESULT npc=kwonjun cmd=come ok=0 reason=blocked\n" + LISTEN_ON)
                 wait_for(lambda: mic.tap is not None, "TV snapshot read and listener open")
 
                 def speak(heard):
@@ -101,9 +109,12 @@ def test_watch_and_calls():
                 assert reply["line"] == "지금은 160인치야." and "vad_end_at" not in reply
                 request = fake.requests[-1]
                 assert "[TV 현재: 화면 160인치(최소 120, 최대 300), 백라이트 42%]" in request["messages"][-1]["content"]
+                # Only the failure is told unasked; the success waits for a question about it.
+                assert "[방금 월드에서 일어난 일: come 실패(길 막힘)]" in request["messages"][-1]["content"]
                 assert "for_me" not in request["output_config"]["format"]["schema"]["required"]
                 assert [row["content"] for row in store.history if row["role"] == "user"] == [spoke]
                 assert "[TV 현재:" not in str(store.history)
+                assert "[방금 월드에서 일어난 일:" not in str(store.history)
                 seq = reply["seq"]
                 wait_for(lambda: tsv("AI_CALLS"), "diagnostics emitted")
                 timing = dict(field.split("=") for field in tsv("TIMING")[-1].split("\t"))
@@ -116,8 +127,8 @@ def test_watch_and_calls():
                 assert re.fullmatch(rf"seq={seq} first:\d+:3:0:[0-9a-f]{{8}}:[0-9a-f]{{8}}:disabled:low",
                                     tsv("AI_CALLS")[-1])
 
-                speak("토아한테, 이리 와")
-                wait_for(lambda: tsv("AI_SKIP"), "other NPC named, skip")
+                speak("토아야, 이리 와")
+                wait_for(lambda: tsv("AI_SKIP"), "other NPC called, skip")
                 assert len(fake.requests) == 1 and "named=0\trecent=1" in tsv("AI_SKIP")[-1]
                 add(path, join(LOCAL) + LISTEN_ON)
                 wait_for(lambda: len(tsv("LISTEN_ON")) == 2, "same world joined again")
@@ -125,6 +136,7 @@ def test_watch_and_calls():
                 speak("권준아 TV 몇 인치야?")
                 assert app.replies.get(timeout=5)["line"] == "지금 값은 몰라."
                 assert "[TV 현재:" not in fake.requests[-1]["messages"][-1]["content"]
+                assert "[방금 월드에서 일어난 일:" not in fake.requests[-1]["messages"][-1]["content"]
             finally:
                 stop.set()
                 watcher.join(3)

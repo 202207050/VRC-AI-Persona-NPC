@@ -94,15 +94,41 @@ class WorldMotionCommandsTest(unittest.TestCase):
                          [{"do": "move_to", "target": "speaker", "gesture": "none"},
                           {"do": "sit", "target": "none", "gesture": "none"}])
 
-    def test_invalid_distance_refuses_the_plan(self):
-        for cm in ("59", "1201", "2m", "60.5", "060", "60\n", 200, None):
+    def test_sit_style_only_for_go_sit(self):
+        # TODO 134: lean / upright pass; another value is left out and the NPC still sits (its default way).
+        for style in ai.SIT_STYLES:
+            self.assertEqual(ai.clamp_steps([{"do": "go_sit", "target": "long", "style": style}]),
+                             [{"do": "go_sit", "target": "long", "gesture": "none", "style": style}])
+        for invalid in ("swing", "LEAN", "1", None, ["lean"], 1):
+            with self.subTest(invalid=invalid):
+                self.assertEqual(ai.clamp_steps([{"do": "go_sit", "style": invalid}]),
+                                 [{"do": "go_sit", "target": "none", "gesture": "none"}])
+        self.assertEqual(ai.clamp_steps([{"do": "sit", "style": "lean"}]),
+                         [{"do": "sit", "target": "none", "gesture": "none"}])
+        self.assertEqual(ai.clamp_steps([{"do": "go_sit", "target": "long", "action": "lean"}]),
+                         [{"do": "go_sit", "target": "long", "gesture": "none", "style": "lean"}])
+        self.assertNotIn("style", ai.reply_schema(False, False)["properties"]["steps"]["items"]["properties"])
+        self.assertIn('앉는 모양을 말하면 action을 넣는다: "기대 앉아/편하게 앉아/등 기대"는 "lean"', ai.RULES)
+
+    def test_distance_out_of_range_is_clamped_and_said(self):
+        # t128 A3: 0.6~12 m ends instead of refusing the whole plan; come still runs.
+        come = {"do": "come", "target": "none", "gesture": "none"}
+        for cm, kept, note in (("59", "60", "distance_min"), ("0", "60", "distance_min"),
+                               ("1201", "1200", "distance_max"), ("060", "60", None)):
             with self.subTest(cm=cm):
-                data = {"lines": {"ko": "움직일게."},
+                data = {"lines": {"ko": "움직일게.", "en": "Moving.", "ja": "動くね。"},
                         "steps": [{"do": "keep_distance", "action": cm}, {"do": "come"}]}
                 reply = ai._clamp_reply(data, global_mode=True)
-                self.assertEqual(reply["steps"], [])
-                self.assertEqual(reply["lines"], ai.localized_lines(ai.DISTANCE_REFUSAL))
+                self.assertEqual(reply["steps"], [{"do": "keep_distance", "target": "none", "gesture": "none",
+                                                   "action": kept}, come])
+                self.assertEqual(reply["line"], "움직일게." + (" " + ai.STEP_NOTES[note][0] if note else ""))
+                self.assertEqual(reply["lines"]["en"], "Moving." + (" " + ai.STEP_NOTES[note][1] if note else ""))
                 self.assertEqual(reply["line"], reply["lines"]["ko"])
+        for cm in ("2m", "60.5", "60\n", 200, None):
+            with self.subTest(unreadable=cm):
+                data = {"lines": {"ko": "움직일게."}, "steps": [{"do": "keep_distance", "action": cm}, {"do": "come"}]}
+                reply = ai._clamp_reply(data)
+                self.assertEqual((reply["steps"], reply["line"]), ([come], "움직일게."))
 
     def test_idle_dialog_does_not_send_player_commands(self):
         dialog = [{"npc": npc, "line": "응.", "gesture": "nod", "steps": [{"do": "prone_tv"}]}

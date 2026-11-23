@@ -116,7 +116,7 @@ class SearchBrain:
             self.release.wait(5)
             self.finished.set()
             return payload("찾아보니 오늘은 맑대!")
-        return dict(payload("다음 말도 들었어!"), remembered={"memory_note": "귤 좋아함."})
+        return payload("다음 말도 들었어!")   # t20: memos come from the memory call (test_activity)
 
 
 def search_checks(tmp):
@@ -208,7 +208,7 @@ def main():
             out = io.StringIO()
             with contextlib.redirect_stdout(out), patch.object(app, "replies", app.ReplyQueue()):
                 search_checks(tmp)
-            ok("기억에 기록함: 귤 좋아함." in out.getvalue() and "둠둠" not in out.getvalue(), "console memory label")
+            ok("둠둠" not in out.getvalue(), "console has no placeholder text")
             with patch.object(app, "replies", app.ReplyQueue()):
                 gaze_search_checks(tmp)
             switched_off_checks(tmp)

@@ -259,7 +259,11 @@ def unit_checks(tmp):
 
     c = cfg()
     ok(set(c) == {"ok", "rev", "npc", "speaker", "persona", "auto", "keep_history", "smalltalk", "players", "notes", "history",
-                  "dictate", "msg"}, "/cfg keys")
+                  "dictate", "msg", "act", "errors", "memory"}, "/cfg keys")
+    ok(set(c["memory"]) == {"v", "persona", "people", "notes", "changed_at", "changes", "digest"}
+       and c["memory"]["people"][0]["name"] == "Tester One" and c["memory"]["people"][0]["talks"] == 9,
+       "/cfg memory (t20): the people the NPC talked with, newest first")
+    ok(isinstance(c["errors"], list), "/cfg errors (TODO 140) is a list")
     ok(c["players"][0] == {"name": "Tester One", "note": "내 인상", "locked": False} and c["speaker"] == "Tester One",
        "players: the speaker first")
     ok(all(isinstance(n, str) for n in c["notes"]) and c["dictate"] is None, "notes are plain texts")
@@ -267,6 +271,10 @@ def unit_checks(tmp):
         send(op="impression", player=f"P{i}", text="마" * 150)
     ok(len(store.players) == persona_store.MAX_PLAYERS and len(bridge.payload()) <= cfg_bridge.MAX_CFG_BYTES,
        "players capped, /cfg still under 16 KB")
+    memory = cfg()["memory"]
+    ok(len(memory["people"]) <= cfg_bridge.MEMORY_PEOPLE and all(len(p["note"]) <= cfg_bridge.CARD_CHARS for p in memory["people"])
+       and len(memory["digest"].encode("utf-8")) <= cfg_bridge.DIGEST_MAX_BYTES
+       and memory["digest"].startswith(cfg_bridge.DIGEST_HEAD + "\nT\t"), "memory block and digest stay within their limits")
 
     # ---- dictation state
     send(op="dictate", target="note_add")

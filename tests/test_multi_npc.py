@@ -65,7 +65,7 @@ class MultiNpcTests(StoreFixture):
             self.assertIs(first, brains.for_npc("itoa"))
             second = brains.for_npc()
             self.assertEqual(factory.call_count, 2)
-            self.assertIn("귤", first.system_blocks()[0]["text"])
+            self.assertIn("조용한 음악", first.system_blocks()[0]["text"])
             self.assertNotEqual(first.system_blocks()[0]["text"], second.system_blocks()[0]["text"])
             self.assertEqual(first.system_blocks()[0]["cache_control"], {"type": "ephemeral"})
             first.reply("안녕")

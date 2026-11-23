@@ -65,7 +65,10 @@ class Round4Voice(unittest.TestCase):
                 mic.push(gaze.room(1.6))
                 self.assertEqual(poll(), progress("thinking"))
                 brain.gate.set()
-                self.assertEqual(poll(), progress("searching"))
+                searching = poll()
+                act = searching.pop("act")      # T118: the searching status carries the turn's record so far
+                self.assertEqual(searching, progress("searching"))
+                self.assertEqual([row["k"] for row in act["rows"]][:2], ["heard", "think"])
                 brain.finish.set()
                 reply = poll()
                 self.assertEqual((reply["npc"], reply["line"], reply["steps"]), ("kwonjun", "찾았어!", []))
@@ -108,14 +111,14 @@ class Round4Voice(unittest.TestCase):
             self.assertEqual(store.players["kwonjun"]["note"], "내 인상")
             self.assertNotIn(payload["speaker"], store.players)
             self.assertIn("주인(이 PC에서 음성 앱을 켠 사람)", persona_ai.Brain("fake", store).about_me())
-            self.assertTrue(store.add_affection("방문자", "pat", now=0))
-            self.assertTrue(store.add_affection("방문자", "hug", now=1))
+            self.assertTrue(store.add_affection("방문자", "pat"))
+            self.assertTrue(store.add_affection("방문자", "hug"))
             store.apply({"players": {"방문자": {"note": "다정함."}}})
             store = persona_store.Store(data_dir=tmp, migrate_persona=False)
-            self.assertEqual(store.add_affection("방문자", "pat", now=100000), "")
-            self.assertEqual(store.add_affection("방문자", "hug", now=100001), "")
+            self.assertEqual(store.add_affection("방문자", "pat"), "")
+            self.assertEqual(store.add_affection("방문자", "hug"), "")
             self.assertEqual(store.players["방문자"]["note"], "다정함.")
-            self.assertTrue(store.for_npc("itoa").add_affection("방문자", "pat", now=100002))
+            self.assertTrue(store.for_npc("itoa").add_affection("방문자", "pat"))
 
     def test_map_prompt_cap_lookup_and_world_move_position(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -23,6 +23,14 @@ def write_json(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
 
 
+def ai_wrote(store, name, impression="", note=""):
+    """What the memory call (t20) stores: a stand-in answer through memory_finish."""
+    p = store.impression(name)
+    return store.memory_finish({"name": name, "impression": p["note"], "profile": p["profile"]},
+                               {"changed": True, "profile": [], "impression": impression,
+                                "notes": [note] if note else []})
+
+
 def make_store(folder):
     personas = folder / "personas"
     personas.mkdir()
@@ -85,10 +93,12 @@ def store_validation_and_capacity_checks(folder):
     notes[1:1] = [{"text": "오래된 자동 메모", "by": "ai"}, {"text": "최근 자동 메모", "by": "ai"}]
     store.apply({"notes": notes})
     assert store.add_note("한도 초과")
-    duplicate = store.after_reply("손님", "안녕", "응", memory_note="  수동   0 ")
-    assert "memory_note" not in duplicate and len(store.notes) == persona_store.MAX_NOTES
-    changed = store.after_reply("손님", "또 안녕", "응", memory_note="새 자동 메모")
-    assert changed == {"memory_note": "새 자동 메모"}
+    store.after_reply("손님", "안녕", "응")
+    duplicate = ai_wrote(store, "손님", note="  수동   0 ")
+    assert duplicate["notes"] == [] and len(store.notes) == persona_store.MAX_NOTES
+    store.after_reply("손님", "또 안녕", "응")
+    changed = ai_wrote(store, "손님", note="새 자동 메모")
+    assert changed["notes"] == ["새 자동 메모"]
     expected = [n["text"] for n in notes if n["text"] != "오래된 자동 메모"] + ["새 자동 메모"]
     loaded = persona_store.Store(store.root_dir, store.persona_path)
     assert [n["text"] for n in loaded.notes] == expected
@@ -168,12 +178,13 @@ def clamp_steps_checks(_folder):
     raw = [tv, look, {"do": "tv_reset"}, walk]
     left = {"do": "tv_left", "target": "none", "gesture": "none"}
     reset = {"do": "tv_reset", "target": "none", "gesture": "none"}
-    assert persona_ai.clamp_steps(raw) == [look, left, reset]
+    # t128: four steps fit (the world's MaxSteps), so the look is no longer squeezed out.
+    assert persona_ai.clamp_steps(raw) == [look, walk, left, reset]
     assert persona_ai.clamp_steps([tv, left]) == [left]
     assert persona_ai.clamp_steps([tv, reset, {"do": "tv_raise"}]) == [left, reset]
     assert raw[0] == {"do": "tv_left", "target": "tv", "gesture": "wave"}
     at_limit = [None] * (persona_ai.MAX_STEPS - 1) + [look, walk]
-    assert persona_ai.clamp_steps(at_limit) == [look], "The input window is applied before filtering"
+    assert persona_ai.clamp_steps(at_limit) == [look, walk], "Invalid entries do not take a slot"
 
     assert persona_ai.clamp_steps([{"do": "mirror", "action": "hq"}, {"do": "night_mode", "action": "30"}]) == [
         {"do": "mirror", "target": "none", "gesture": "none", "action": "hq"},
@@ -189,12 +200,14 @@ def clamp_steps_checks(_folder):
     said = "원래대로 돌리고 최대한 가까이 당길게!"
     assert fill([reset], heard, said) == [reset, closer]
     assert fill([closer], heard, said) == [reset, closer]
-    assert fill([closer, reset], heard, said) == [reset, closer]
+    assert fill([closer, reset], heard, said) == [closer, reset]
     assert fill([size_max], "TV 사이즈 최대로 하고 TV 최대한 당겨줘", "최대로 키우고 최대한 당길게!") == [size_max, closer]
     assert fill([reset], heard, "원래대로 돌릴게!") == [reset]
     assert fill([reset], "TV 초기화해줘", said) == [reset]
     assert fill([closer], "TV 원상태로 돌리고 최대한 당겨줘", "원상태로 돌리고 최대한 가까이 당길게!") == [reset, closer]
-    assert fill([look, walk, reset], heard, said) == [look, reset, closer]
+    # t128: four steps, so the look stays; with all four taken the look makes room for the TV step.
+    assert fill([look, walk, reset], heard, said) == [look, walk, reset, closer]
+    assert fill([look, walk, walk, reset], heard, said) == [walk, walk, reset, closer]
     pause = {"do": "tv_pause", "target": "none", "gesture": "none"}
     assert fill([pause, reset], "TV 일시정지하고 원래대로 돌려줘", "일시정지하고 원래대로 돌릴게!") == [pause, reset]
     # "원래대로" about a pose or an outfit must not send the NPC to the TV
@@ -296,20 +309,26 @@ def affection_store_checks(folder):
     store = make_store(folder)
     itoa = store.for_npc("itoa")
     phrase = persona_store.AFFECTION_PHRASES["wave"]
-    interval = persona_store.AFFECTION_INTERVAL_S
-    now = 1000.0
-    max_note = persona_store.MAX_IMPRESSION_CHARS
-    prefix = "귤" * (max_note - len(phrase) - 1)
+    prefix = "귤" * persona_store.MAX_IMPRESSION_CHARS
 
+    # t20: a full impression no longer blocks it: the wave is kept next to the impression, never inside it
     assert not itoa.set_impression("손님", prefix)
-    assert itoa.add_affection("  손님  ", "wave", now=now) == phrase
-    assert itoa.impression("손님")["note"] == f"{prefix} {phrase}"
-    assert len(itoa.impression("손님")["note"]) == max_note
-    assert not itoa.set_impression("손님", prefix)
-    assert itoa.add_affection("손님", "wave", now=now + interval - 0.001) == ""
-    assert itoa.impression("손님")["note"] == prefix
-    assert itoa.add_affection("손님", "wave", now=now + interval) == phrase
+    assert itoa.add_affection("  손님  ", "wave") == phrase
+    assert itoa.impression("손님")["note"] == prefix and itoa.impression("손님")["touch_recorded"] == ["wave"]
+    assert itoa.add_affection("손님", "wave") == "", "each kind once per player"
+    assert not itoa.set_impression("손님", "새 인상")
+    assert itoa.add_affection("손님", "wave") == "" and itoa.impression("손님")["touch_recorded"] == ["wave"]
+    assert phrase in itoa.prompt_tail("손님") and "새 인상" in itoa.prompt_tail("손님")
     assert itoa.impression("손님")["talks"] == 0 and "손님" not in store.players
+    # an older file with the phrase inside the impression: moved next to it on load
+    (folder / "old").mkdir()
+    old = make_store(folder / "old")
+    Path(old.data_dir).mkdir(parents=True)
+    write_json(Path(old.data_dir) / "impressions.json",
+               {"players": {"A": {"note": "다정함. " + persona_store.AFFECTION_PHRASES["pat"], "talks": 1}}})
+    loaded = persona_store.Store(old.root_dir, old.persona_path)
+    assert loaded.players["A"]["note"] == "다정함." and loaded.players["A"]["touch_recorded"] == ["pat"]
+    assert loaded.players["A"]["profile"] == [], "no profile in an older file: an empty list"
 
 
 def affection_log_checks(folder):
@@ -343,9 +362,11 @@ def affection_log_checks(folder):
             yield STAMP + event + "\r\n"
         stop.set()
 
-    tail = SimpleNamespace(path=str(file), world="local:test", player="", chat_epoch=0,
-                           npc_state=dict(app.DEFAULT_NPC_STATE, itoa=True), lines=lines, close=Mock(),
-                           npc_epoch=dict.fromkeys(app.DEFAULT_NPC_STATE, 0))
+    tail = app.LogTail(str(file))
+    tail.world = "local:test"
+    tail.npc_state["itoa"] = True
+    tail.lines = lines
+    tail.close = Mock(wraps=tail.close)
     bridge = cfg_bridge.CfgBridge(store, log=logger)
     watcher_threads = SimpleNamespace(Lock=threading.Lock, Thread=Mock())
     with patch.object(app, "recent_output_logs", return_value=[str(file)]), \
@@ -353,14 +374,14 @@ def affection_log_checks(folder):
             patch.object(app, "threading", watcher_threads):
         app.watch_log(str(folder), None, None, False, store=store, bridge=bridge, stop=stop, listen_mode="ptt")
 
-    phrases = persona_store.AFFECTION_PHRASES
     itoa = store.for_npc("itoa")
-    assert {who: data["note"] for who, data in itoa.players.items()} == {
-        "귤 팬 npc=kwonjun": phrases["wave"], "복귀한 손님": phrases["pat"],
+    assert {who: data["touch_recorded"] for who, data in itoa.players.items()} == {
+        "귤 팬 npc=kwonjun": ["wave"], "복귀한 손님": ["pat"],
     }
-    assert {who: data["note"] for who, data in store.players.items()} == {
-        long_name[:persona_store.MAX_NAME_CHARS]: phrases["hug"],
+    assert {who: data["touch_recorded"] for who, data in store.players.items()} == {
+        long_name[:persona_store.MAX_NAME_CHARS]: ["hug"],
     }
+    assert all(data["note"] == "" for data in [*itoa.players.values(), *store.players.values()])
     affection = [call.args[1] for call in logger.call_args_list if call.args[0] == "AFFECTION"]
     noted = [detail.split("\t")[:2] for detail in affection if detail.endswith("\tnoted=1")]
     assert noted == [["type=wave", "npc=itoa"], ["type=hug", "npc=kwonjun"], ["type=pat", "npc=itoa"]]

@@ -42,6 +42,14 @@ def new_store(tmp, name):
     return persona_store.Store(data_dir=os.path.join(tmp, name), persona_path=persona)
 
 
+def wrote(st, name, impression="", note=""):
+    """t20: one exchange, then the memory call's answer (impression / memo) stored as the app does."""
+    st.after_reply(name, "안녕", "{}")
+    p = st.impression(name)
+    return st.memory_finish({"name": name, "impression": p["note"], "profile": p["profile"]},
+                            {"changed": True, "profile": [], "impression": impression, "notes": [note] if note else []})
+
+
 def store_file_checks(tmp):
     # ---- a JSON saved by Notepad as "UTF-8 with BOM" is read, not treated as empty
     folder = os.path.join(tmp, "bom", "npcs", "kwonjun")
@@ -51,7 +59,7 @@ def store_file_checks(tmp):
                   f, ensure_ascii=False)
     st = new_store(tmp, "bom")
     ok(st.players["앨리스"]["note"] == "다정함" and not st.load_problems, "BOM impressions.json is read")
-    st.after_reply("밥", "안녕", "{}", impression="처음 봄")
+    wrote(st, "밥", impression="처음 봄")
     again = new_store(tmp, "bom")
     ok(set(again.players) == {"앨리스", "밥"} and again.players["앨리스"]["locked"], "and survives the next save")
 
@@ -78,24 +86,24 @@ def store_file_checks(tmp):
 def capacity_checks(tmp):
     st = new_store(tmp, "full")
     st.apply({"notes": [{"text": f"내 메모 {i}", "by": "user"} for i in range(persona_store.MAX_NOTES)]})
-    changed = st.after_reply("앨리스", "안녕", "{}", memory_note="AI가 적으려는 것")
+    changed = wrote(st, "앨리스", note="AI가 적으려는 것")
     ok(len(st.notes) == persona_store.MAX_NOTES and all(n["by"] == "user" for n in st.notes)
-       and "memory_note" not in changed, "60 notes of the user: the AI's note is skipped, none is dropped")
+       and changed["notes"] == [], "60 notes of the user: the AI's note is skipped, none is dropped")
     st.apply({"notes": [{"text": "AI 옛 메모", "by": "ai"}]
               + [{"text": f"내 메모 {i}", "by": "user"} for i in range(persona_store.MAX_NOTES - 1)]})
-    changed = st.after_reply("앨리스", "안녕", "{}", memory_note="AI 새 메모")
+    changed = wrote(st, "앨리스", note="AI 새 메모")
     texts = [n["text"] for n in st.notes]
-    ok(changed.get("memory_note") == "AI 새 메모" and "AI 옛 메모" not in texts and texts[-1] == "AI 새 메모"
+    ok(changed["notes"] == ["AI 새 메모"] and "AI 옛 메모" not in texts and texts[-1] == "AI 새 메모"
        and len(texts) == persona_store.MAX_NOTES, "an old AI note still makes room for a new one")
 
     st = new_store(tmp, "locked")
     st.apply({"players": {f"p{i}": {"note": "잠금", "locked": True} for i in range(persona_store.MAX_PLAYERS)}})
-    changed = st.after_reply("새사람", "안녕", "{}", impression="처음 봄")
-    ok(len(st.players) == persona_store.MAX_PLAYERS and "새사람" not in st.players and "impression" not in changed,
+    changed = wrote(st, "새사람", impression="처음 봄")
+    ok(len(st.players) == persona_store.MAX_PLAYERS and "새사람" not in st.players and changed["impression"] is None,
        "50 locked impressions: none is dropped for a newcomer")
     st.apply({"players": dict({f"p{i}": {"note": "잠금", "locked": True} for i in range(persona_store.MAX_PLAYERS - 1)},
                               열림={"note": "안 잠금", "locked": False})})
-    st.after_reply("새사람", "안녕", "{}", impression="처음 봄")
+    wrote(st, "새사람", impression="처음 봄")
     ok("새사람" in st.players and "열림" not in st.players and len(st.players) == persona_store.MAX_PLAYERS,
        "an unlocked impression is the one that goes")
 
@@ -104,7 +112,7 @@ def merge_checks(tmp):
     st = new_store(tmp, "merge")
     st.apply({"notes": [{"text": "하나"}, {"text": "둘"}]})
     base = [n["text"] for n in st.notes]                     # the page loads here ...
-    st.after_reply("앨리스", "안녕", "{}", memory_note="NPC가 그 사이에 적음")
+    wrote(st, "앨리스", note="NPC가 그 사이에 적음")
     st.apply({"notes": [{"text": "하나 고침", "by": "user"}], "notes_base": base})   # ... edits one, deletes one
     ok([n["text"] for n in st.notes] == ["하나 고침", "NPC가 그 사이에 적음"],
        "a stale page keeps the memo the NPC added meanwhile")
@@ -113,7 +121,7 @@ def merge_checks(tmp):
     ok([n["text"] for n in st.notes] == ["통째로"], "no notes_base = the old whole-list replace")
     st.apply({"notes": [{"text": f"m{i}"} for i in range(persona_store.MAX_NOTES - 1)]})
     base = [n["text"] for n in st.notes]
-    st.after_reply("앨리스", "안녕", "{}", memory_note="하나 더")
+    wrote(st, "앨리스", note="하나 더")
     before = [n["text"] for n in st.notes]
     try:
         st.apply({"notes": [{"text": t} for t in base] + [{"text": "넘침"}], "notes_base": base})
@@ -124,8 +132,8 @@ def merge_checks(tmp):
     st = new_store(tmp, "merge_p")
     st.apply({"players": {"앨리스": {"note": "다정함", "locked": False}, "밥": {"note": "조용함", "locked": False}}})
     base = {k: dict(v) for k, v in st.players.items()}
-    st.after_reply("앨리스", "안녕", "{}", impression="야경을 좋아함")       # NPC rewrites Alice
-    st.after_reply("캐럴", "안녕", "{}", impression="처음 봄")               # and meets Carol
+    wrote(st, "앨리스", impression="야경을 좋아함") # NPC rewrites Alice
+    wrote(st, "캐럴", impression="처음 봄") # and meets Carol
     st.set_locked("앨리스", True)
     page = {"앨리스": dict(base["앨리스"]), "밥": {"note": "조용하지만 웃김", "locked": False}}
     st.apply({"players": page, "players_base": base})

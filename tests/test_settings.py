@@ -89,42 +89,67 @@ def main():
         ok(app.find_local_player(log) == "Tester One", "local player name read from the VRChat log")
         store.set_speaker("Tester One")
 
-        fake.answers.append(answer("안녕!", impression="다정함. 야경을 좋아함.", memory_note="Tester One은 공포 영화를 못 본다"))
-        r = brain.reply("안녕, 야경 예쁘다")
+        # t20: the reply writes no impression / memo; the memory call after it does (the app starts it)
+        brain.client.with_options = lambda **_: brain.client
+
+        def memory_call(**result):
+            job = store.memory_begin("Tester One")
+            fake.answers.append(dict({"changed": True, "profile": [], "impression": "", "notes": []}, **result))
+            data, usage = brain.update_memory(job)
+            return job, store.memory_finish(job, data, usage)
+
+        fake.answers.append(answer("안녕!"))
+        me = {"speaker": "Tester One", "source": "PC 주인 마이크"}
+        r = brain.reply("안녕, 야경 예쁘다", utterance=me)
         ok(r["line"] == "안녕!" and "error" not in r, "mocked reply comes back")
         ok("impression" not in r["lines"] and set(r) >= {"emotion", "steps", "line"}, "world reply shape unchanged")
-        ok(store.players["Tester One"]["note"] == "다정함. 야경을 좋아함.", "AI impression merged")
         ok(store.players["Tester One"]["talks"] == 1, "talk count")
-        ok(store.notes[0]["text"].startswith("Tester One은") and store.notes[0]["by"] == "ai", "AI memory note stored")
         ok(len(store.history) == 2, "exchange stored")
         props = fake.requests[0]["output_config"]["format"]["schema"]["properties"]
-        ok("impression" in props and "memory_note" in props, "schema offers the optional fields")
-        ok("impression" not in fake.requests[0]["output_config"]["format"]["schema"]["required"], "fields are optional")
+        ok("impression" not in props and "memory_note" not in props, "t20: the reply schema has no memory fields")
+        job, done = memory_call(impression="다정함. 야경을 좋아함.", profile=["야경을 좋아함"],
+                                notes=["Tester One은 공포 영화를 못 본다"])
+        call = fake.requests[-1]
+        ok(call["model"] == persona_ai.MODELS["haiku"] and call["thinking"] == {"type": "disabled"}
+           and call["output_config"]["effort"] == "low"
+           and call["output_config"]["format"]["schema"] == persona_ai.MEMORY_SCHEMA, "memory call: Haiku, no thinking, low")
+        ok(job["turns"] == [{"them": "안녕, 야경 예쁘다", "me": "안녕!"}] and json.loads(call["messages"][0]["content"])["turns"]
+           == job["turns"], "the memory call reads that person's exchange")
+        ok(store.players["Tester One"]["note"] == "다정함. 야경을 좋아함." and done["impression"]["after"] == "다정함. 야경을 좋아함."
+           and store.players["Tester One"]["before"] == "", "AI impression stored, with the one before it")
+        ok(store.players["Tester One"]["profile"] == ["야경을 좋아함"], "AI profile stored")
+        ok(store.notes[0]["text"].startswith("Tester One은") and store.notes[0]["by"] == "ai", "AI memory note stored")
 
         fake.answers.append(answer("그치?"))
         brain.reply("응")
-        system = sys_text(fake.requests[1])
-        blocks = fake.requests[1]["system"]
+        second = fake.requests[-1]                                # [1] is the memory call now
+        system = sys_text(second)
+        blocks = second["system"]
         ok(isinstance(blocks, list) and blocks[0].get("cache_control") == {"type": "ephemeral"}
            and "Tester One" not in blocks[0]["text"] and "Tester One" in blocks[1]["text"]
-           and blocks[-1]["text"] == persona_ai.content_order(0),
+           and persona_ai.content_order(0) in [b["text"] for b in blocks[2:]],
            "fixed rules+persona block is cached, the changing memory/impression comes after it")
         ok("다정함. 야경을 좋아함." in system and "공포 영화" in system and "Tester One" in system,
            "impression + memory + name are fed back into the system prompt")
-        ok(fake.requests[1]["messages"][-1] == {"role": "user", "content": "응"} and len(fake.requests[1]["messages"]) == 3,
+        ok("- 이 사람에 대해 아는 것: 야경을 좋아함" in blocks[1]["text"], "t20: the profile sits next to the impression, uncached")
+        ok(second["messages"][-1] == {"role": "user", "content": "응"} and len(second["messages"]) == 3,
            "history sent with the new line last")
 
-        fake.answers.append(answer("x" * 10, impression="가" * 500, memory_note="나" * 500))
+        fake.answers.append(answer("x" * 10))
         brain.reply("길게")
+        memory_call(impression="가" * 500, profile=["다" * 500], notes=["나" * 500])
         ok(len(store.players["Tester One"]["note"]) == persona_store.AI_IMPRESSION_CHARS, "AI impression capped")
+        ok(len(store.players["Tester One"]["profile"][0]) == persona_store.PROFILE_CHARS, "AI profile line capped")
         ok(len(store.notes[-1]["text"]) == persona_store.MAX_NOTE_CHARS, "memory note capped")
 
         store.apply({"players": {"Tester One": {"note": "내가 직접 적음", "locked": True}}})
-        fake.answers.append(answer("응", impression="AI가 덮어쓰려 함"))
+        fake.answers.append(answer("응"))
         brain.reply("잠금 확인")
-        ok(store.players["Tester One"]["note"] == "내가 직접 적음", "locked impression is not overwritten")
-        ok("impression" not in fake.requests[-1]["output_config"]["format"]["schema"]["properties"],
-           "locked -> field not even offered")
+        profile = list(store.players["Tester One"]["profile"])
+        _, done = memory_call(impression="AI가 덮어쓰려 함", profile=["덮어씀"], notes=["잠금이어도 메모는 됨"])
+        ok(store.players["Tester One"]["note"] == "내가 직접 적음" and store.players["Tester One"]["profile"] == profile
+           and done["impression"] is None, "locked impression and profile are not overwritten")
+        ok(store.notes[-1]["text"] == "잠금이어도 메모는 됨", "a locked player's memos may still be written")
         ok(store.players["Tester One"]["talks"] == 4, "talk count survives a manual edit")
 
         fake.answers.append({"emotion": "happy"})                 # broken answer: no line
@@ -133,11 +158,12 @@ def main():
         ok("error" in r and len(store.history) == n, "failed turn leaves the history untouched")
 
         for i in range(persona_store.MAX_NOTES + 5):
-            fake.answers.append(answer("응", memory_note=f"메모 {i}"))
-            brain.reply(f"말 {i}")
+            fake.answers.append(answer("응"))
+            brain.reply(f"말 {i}", utterance=me)
+            memory_call(notes=[f"메모 {i}"])
         ok(len(store.notes) == persona_store.MAX_NOTES, "notes capped")
         ok(len(store.history) == 2 * persona_store.MAX_HISTORY, "history capped")
-        ok(not os.path.exists(os.path.join(store.data_dir, "history.json")), "history not saved by default")
+        ok(os.path.exists(os.path.join(store.data_dir, "history.json")), "t20: history is kept by default")
 
         # ---- server on a spare port
         server = app.make_server(0, store, brain)
@@ -188,9 +214,11 @@ def main():
             ok(status == 200 and [n["text"] for n in store.notes] == ["손님은 커피를 좋아한다"], "notes replaced")
             ok(len(store.history) == 2 * persona_store.MAX_HISTORY - 2, "one exchange deleted")
             ok(os.path.exists(os.path.join(store.data_dir, "history.json")), "keep_history on -> history.json written")
-            fake.answers.append(answer("응", impression="무시되어야 함", memory_note="무시되어야 함"))
+            fake.answers.append(answer("응"))
             brain.reply("자동 끔")
-            ok(len(store.notes) == 1 and "memory_note" not in fake.requests[-1]["output_config"]["format"]["schema"]["properties"],
+            ok(store.memory_claim("Tester One") is None, "auto_update off -> no memory call is started")
+            _, done = memory_call(impression="무시되어야 함", notes=["무시되어야 함"])
+            ok(len(store.notes) == 1 and done["notes"] == [] and done["impression"] is None,
                "auto_update off -> AI changes nothing")
             ok(request(port, "POST", "/api/save", {"history_delete": 0, "history_heard": "아닌 말"}, auth)[0] == 400,
                "stale history delete is refused")

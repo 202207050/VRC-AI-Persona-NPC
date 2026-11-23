@@ -95,7 +95,7 @@ def step_checks(tmp):
     ok(persona_ai.clamp_steps([{"do": "emote", "emotion": "happy"}])[0]["duration"] == 3
        and not persona_ai.clamp_steps([{"do": "emote", "emotion": "unknown"}]),
        "missing emote duration defaults to 3 and unknown emotions are dropped")
-    ok("tv_size_set" in enum["do"]["enum"] and enum["inches"]["type"] == "number"
+    ok("tv_size_set" in enum["do"]["enum"] and "inches" in enum["unit"]["enum"]
        and persona_ai.clamp_steps([{"do": "tv_size_set", "inches": 183.5}]) ==
        [{"do": "tv_size_set", "target": "none", "gesture": "none", "inches": 183.5}],
        "exact screen size is passed to the stick for snapping and fitting")
@@ -106,7 +106,7 @@ def step_checks(tmp):
        "junk and unknown steps are dropped")
     rules = persona_ai.RULES
     for piece in ("- follow:", "시키지 않았는데 따라가지 않는다", "- come:", "- stop:", "- go_sit:", "tv_closer/tv_farther",
-                  "TV 명령은 대답당 최대 두 개를 요청 순서대로 마지막에 넣고", 'target과 gesture를 "none"으로 둔다', "sit: 소파에 가서 앉는다",
+                  "TV 명령은 요청 순서대로 마지막에 넣고", 'target과 gesture를 "none"으로 둔다', "sit: 소파에 가서 앉는다",
                   "대화 중에는 현재 자세를 유지한다", '"계속해"에는 새 이동·자세·TV 동작을 넣거나',
                   'target "bridge_view"는 다리가 보이는 창가다'):
         ok(piece in rules, f"RULES has: {piece}")
@@ -164,34 +164,30 @@ def affection_store_checks(tmp):
     itoa = store.for_npc("itoa")
     pat = persona_store.AFFECTION_PHRASES["pat"]
     hug = persona_store.AFFECTION_PHRASES["hug"]
-    t0 = 1_000_000.0
-    ok(itoa.add_affection("Alice", "pat", now=t0) == pat and itoa.players["Alice"]["note"] == pat,
-       "a pat is noted in that NPC's impression of that player")
+    # t20: the fixed phrases are kept next to the impression (touch_recorded), never inside it
+    ok(itoa.add_affection("Alice", "pat") == pat and itoa.players["Alice"]["touch_recorded"] == ["pat"]
+       and itoa.players["Alice"]["note"] == "", "a pat is recorded for that NPC and that player, not in the impression")
     ok("Alice" not in store.players, "the other NPC's store is untouched")
-    ok(itoa.add_affection("Alice", "pat", now=t0 + 599) == "", "same player, same type within 10 minutes: nothing")
-    ok(itoa.add_affection("Alice", "hug", now=t0 + 1) == hug and itoa.players["Alice"]["note"] == pat + " " + hug,
-       "another type is noted next to it")
-    ok(itoa.add_affection("Bob", "pat", now=t0 + 2) == pat, "another player has their own limit")
-    ok(itoa.add_affection("Alice", "pat", now=t0 + 601) == "" and itoa.players["Alice"]["note"].count(pat) == 1,
-       "after 10 minutes the same phrase is still not repeated")
+    ok(itoa.add_affection("Alice", "pat") == "", "same player, same type: recorded once")
+    ok(itoa.add_affection("Alice", "hug") == hug and itoa.players["Alice"]["touch_recorded"] == ["pat", "hug"],
+       "another type is recorded next to it")
+    ok(itoa.add_affection("Bob", "pat") == pat, "another player has their own record")
     itoa.set_impression("Alice", "귤을 좋아함.")
-    ok(itoa.add_affection("Alice", "pat", now=t0 + 1300) == "" and itoa.players["Alice"]["note"] == "귤을 좋아함.",
-       "the recorded pat stays deduplicated after the impression is edited")
-    ok(itoa.add_affection("Alice", "kiss", now=t0) == "" and itoa.add_affection("", "pat", now=t0) == "",
+    ok(itoa.add_affection("Alice", "pat") == "" and itoa.players["Alice"]["note"] == "귤을 좋아함."
+       and itoa.players["Alice"]["touch_recorded"] == ["pat", "hug"], "an edited impression keeps the record and is not grown")
+    ok(itoa.add_affection("Alice", "kiss") == "" and itoa.add_affection("", "pat") == "",
        "unknown type / empty name: nothing")
     itoa.set_locked("Carol", True)
-    ok(itoa.add_affection("Carol", "pat", now=t0) == "" and itoa.players["Carol"]["note"] == "", "a locked impression is left alone")
+    ok(itoa.add_affection("Carol", "pat") == "" and "touch_recorded" not in itoa.players["Carol"], "a locked player is left alone")
     itoa.apply({"settings": {"auto_update": False}})
-    ok(itoa.add_affection("Dave", "pat", now=t0) == "" and "Dave" not in itoa.players, "auto update off: nothing")
+    ok(itoa.add_affection("Dave", "pat") == "" and "Dave" not in itoa.players, "auto update off: nothing")
     itoa.apply({"settings": {"auto_update": True}})
-    itoa.set_impression("Eve", "가" * (persona_store.MAX_IMPRESSION_CHARS - 3))
-    ok(itoa.add_affection("Eve", "pat", now=t0) == "", "an impression that is already full is not cut or grown")
     again = persona_store.Store(data_dir=store.root_dir, persona_path=store.persona_path).for_npc("itoa")
-    ok(again.players["Bob"]["note"] == pat, "the note is saved to disk")
+    ok(again.players["Bob"]["touch_recorded"] == ["pat"] and again.players["Bob"]["note"] == "", "the record is saved to disk")
     full = new_store(tmp, "aff_full")
     for i in range(persona_store.MAX_PLAYERS):
         full.set_impression(f"p{i}", "x")
-    ok(full.add_affection("Stranger", "hug", now=t0) == "" and len(full.players) == persona_store.MAX_PLAYERS,
+    ok(full.add_affection("Stranger", "hug") == "" and len(full.players) == persona_store.MAX_PLAYERS,
        "a full player list: nobody is pushed out for it")
 
 
@@ -310,14 +306,14 @@ def watcher_checks(tmp):
         add(path, T + "[W04AI] AFFECTION type=pat npc=itoa by=Mikan Lover 404\n")
         itoa = store.for_npc("itoa")
         wait_for(lambda: "Mikan Lover 404" in itoa.players, "AFFECTION line noted")
-        ok(itoa.players["Mikan Lover 404"]["note"] == persona_store.AFFECTION_PHRASES["pat"]
-           and "Mikan Lover 404" not in store.players, "pat by a named player -> that NPC's impression of them")
+        ok(itoa.players["Mikan Lover 404"]["touch_recorded"] == ["pat"]
+           and "Mikan Lover 404" not in store.players, "pat by a named player -> that NPC's record of them")
         add(path, T + "[W04AI] AFFECTION type=pat npc=itoa by=Mikan Lover 404\n"
             + T + "[W04AI] AFFECTION type=hug npc=kwonjun by=Mikan Lover 404\n"
             + T + "[W04AI] AFFECTION type=bite npc=kwonjun by=Bad\n")
         wait_for(lambda: "Mikan Lover 404" in store.players, "hug for kwonjun noted")
-        ok(store.players["Mikan Lover 404"]["note"] == persona_store.AFFECTION_PHRASES["hug"]
-           and itoa.players["Mikan Lover 404"]["note"] == persona_store.AFFECTION_PHRASES["pat"]
+        ok(store.players["Mikan Lover 404"]["touch_recorded"] == ["hug"]
+           and itoa.players["Mikan Lover 404"]["touch_recorded"] == ["pat"]
            and "Bad" not in store.players, "repeat is rate-limited, other NPC separate, unknown type ignored")
         ok([d.split("\t")[-1] for d in tsv("AFFECTION")] == ["noted=1", "noted=0", "noted=1"], "AFFECTION is logged")
 
@@ -339,6 +335,13 @@ def watcher_checks(tmp):
         add(path, T + f"[W04AI] AFFECTION type=hug npc=kwonjun by={who}\n")
         wait_for(lambda: "kwonjun" in app.touch_now, "second hug received")
         ok(context_at("kwonjun", app.touch_now["kwonjun"]["at"] + 91) is None, "missing end expires")
+        # r8 fix: a hug from before a rejoin / world change never gets its AFFECTION_END: it is forgotten.
+        add(path, T + f"[W04AI] AFFECTION type=hug npc=kwonjun by={who}\n")
+        wait_for(lambda: "kwonjun" in app.touch_now, "third hug received")
+        ok(app.touch_now["kwonjun"]["path"] == path, "the hug remembers which log reported it")
+        add(path, join(LOCAL))
+        wait_for(lambda: "kwonjun" not in app.touch_now, "rejoining clears the hug situation")
+        ok(app.touch_context("kwonjun") is None, "no hug context after the rejoin")
 
         # ---- NPC_POSE
         add(path, T + "[W04AI] NPC_POSE npc=itoa pose=sit\n")
@@ -353,7 +356,7 @@ def watcher_checks(tmp):
             wait_for(lambda: rec.cancels == 1, "held too long -> cancelled")
         finally:
             app.PTT_MAX_S = old_max
-        ok(tsv("PTT_CANCEL") == ["too_long"] and rec.stops == stops, "the recording is thrown away, not transcribed")
+        ok(tsv("PTT_CANCEL") == ["too_long\tcode=V115"] and rec.stops == stops, "the recording is thrown away, not transcribed")
         add(path, up("kwonjun"))
         time.sleep(0.4)
         ok(app.replies.empty() and rec.stops == stops, "the late release is ignored")
@@ -364,7 +367,7 @@ def watcher_checks(tmp):
         wait_for(lambda: rec.presses == presses + 1 and len(tsv("PTT_DOWN")) == down_logs + 1, "pressed again")
         add(path, join(OTHER))
         wait_for(lambda: rec.cancels == 2, "world change -> cancelled")
-        ok(tsv("PTT_CANCEL") == ["too_long", "world_changed"] and itoa.pose == "stand",
+        ok(tsv("PTT_CANCEL") == ["too_long\tcode=V115", "world_changed\tcode=V115"] and itoa.pose == "stand",
            "world change drops the recording and forgets the pose")
         add(path, join(LOCAL) + down("kwonjun") + up("kwonjun"))
         ok(app.replies.get(timeout=5)["heard"].startswith("clip "), "push-to-talk works again after coming back")

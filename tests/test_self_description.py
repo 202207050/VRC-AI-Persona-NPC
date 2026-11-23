@@ -69,7 +69,8 @@ class SelfDescriptionTests(unittest.TestCase):
             lines = on_request["output_config"]["format"]["schema"]["properties"]["lines"]
             self.assertEqual(lines["required"], ["ko", "en", "ja"])
             self.assertEqual(set(lines["properties"]), {"ko", "en", "ja"})
-            self.assertEqual(lines["required"], ["ko", "en", "ja"])
+            self.assertEqual(on_request["max_tokens"], 1100)
+            self.assertEqual(off_request["max_tokens"], 600)
             self.assertEqual(on["lines"], {"ko": "영화 볼래?", "en": "Tickets for 12,500?", "ja": "それは秘密だよ！"})
             self.assertEqual(off["lines"], {"ko": "영화 볼래?"})
             self.assertEqual(json.loads(off_request["messages"][-2]["content"])["lines"], off["lines"])

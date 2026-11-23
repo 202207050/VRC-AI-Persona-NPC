@@ -55,7 +55,8 @@ class OutfitCommandsTest(unittest.TestCase):
                         self.assertIn(target, fields["target"]["enum"])
                         self.assertIn('For outfit, "on" or "off"', fields["action"]["description"])
 
-    def test_invalid_model_plan_refuses(self):
+    def test_invalid_model_step_is_left_out_and_said(self):
+        # t128 A2: only the wrong outfit step is left out; the valid one runs and the line says what changed.
         for npc, target, action in (("itoa", "넥타이", "off"), ("kwonjun", "목리본", "on"),
                                     ("kwonjun", "모자", "off"), ("kwonjun", "넥타이", "loosen"),
                                     ("itoa", "겉옷", True), ("itoa", ["겉옷"], "off")):
@@ -64,8 +65,8 @@ class OutfitCommandsTest(unittest.TestCase):
                 self.set_model_steps(brain, [{"do": "outfit", "target": target, "action": action},
                                              {"do": "outfit", "target": "신발", "action": "off"}])
                 reply = brain.reply("옷을 바꿔 줘.", global_mode=True)
-                self.assertEqual(reply["steps"], [])
-                self.assertEqual(reply["lines"], ai.localized_lines(ai.OUTFIT_REFUSAL))
+                self.assertEqual(reply["steps"], [{"do": "outfit", "target": "신발", "action": "off"}])
+                self.assertEqual(reply["lines"]["ko"], "해 볼게. " + ai.STEP_NOTES["outfit"][0])
 
     def test_exposure_refuses_before_model_at_all_levels(self):
         brain = self.brains["kwonjun"]
@@ -78,14 +79,16 @@ class OutfitCommandsTest(unittest.TestCase):
                     self.assertEqual(reply["lines"], ai.localized_lines(ai.EXPOSURE_REFUSAL))
         brain.client.messages.create.assert_not_called()
 
-    def test_loosen_tie_and_hat_requests_refuse_before_model(self):
+    def test_loosen_tie_hat_and_take_all_off_go_to_the_model(self):
+        # t128 A7·A8: no fixed refusal; the model answers with the nearest toggle or a choice.
         brain = self.brains["kwonjun"]
-        for text in ("넥타이 느슨하게 해 줘", "모자 벗어"):
+        self.set_model_steps(brain, [{"do": "outfit", "target": "겉옷", "action": "off"}])
+        for text in ("넥타이 느슨하게 해 줘", "모자 벗어", "겉옷 다 벗어", "옷 다 벗어", "권준아 지금 다 벗어"):
             with self.subTest(text=text):
                 reply = brain.reply(text)
-                self.assertEqual(reply["steps"], [])
-                self.assertEqual(reply["line"], ai.OUTFIT_REFUSAL[0])
-        brain.client.messages.create.assert_not_called()
+                self.assertEqual(reply["line"], "해 볼게.")
+                self.assertEqual(reply["steps"], [{"do": "outfit", "target": "겉옷", "action": "off"}])
+        self.assertEqual(brain.client.messages.create.call_count, 5)
 
     def test_cloud_prompt_export_is_current(self):
         path = Path(export_cloud_prompt.OUT_PATH)

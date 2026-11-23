@@ -2,59 +2,59 @@
   "kwonjun,itoa": [
     [
       {"npc":"kwonjun","line":"영화 틀기 전에 소파 자리부터 골라.","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"Pick a spot on the couch before we start the movie.","ja":"映画をつける前に、ソファの席を選んで。"}},
-      {"npc":"itoa","line":"창가 쪽! 스크린이랑 야경이 둘 다 보여.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"By the window! I can see the screen and the city lights.","ja":"窓側！画面も夜景も見えるよ。"}},
-      {"npc":"kwonjun","line":"좋아, 난 누워도 안 밀리는 데로 갈래.","emotion":"neutral","intensity":0.6,"gesture":"none","lines":{"en":"Good. I'll pick a spot where I won't slide off lying down.","ja":"いいね。寝転がってもずり落ちない席にするよ。"}}
+      {"npc":"itoa","line":"창가 쪽. 화면이랑 야경이 같이 보여서 좋아.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"The window side. I can see the screen and the city at once.","ja":"窓側。画面と夜景が一緒に見えていいよ。"}},
+      {"npc":"kwonjun","line":"그럼 난 긴 소파 쪽에 앉을게.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Then I'll take the long couch.","ja":"じゃあ僕は長いソファに座るよ。"}}
     ],
     [
-      {"npc":"kwonjun","line":"저 건물 꼭대기 불빛, 영화 엔딩 같아.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"That light at the top of the building feels like a movie ending.","ja":"あのビルのてっぺんの灯り、映画のエンディングみたい。"}},
-      {"npc":"itoa","line":"아직 주인공이 귤을 안 먹었잖아. 엔딩은 일러.","emotion":"surprised","intensity":0.6,"gesture":"think","lines":{"en":"The hero hasn't eaten a tangerine yet. Too early for the ending.","ja":"主人公がまだみかん食べてないよ。終わるには早いね。"}}
+      {"npc":"kwonjun","line":"저 건물 꼭대기 불빛, 영화 마지막 장면 같네.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"That light on top of the building looks like a movie's last scene.","ja":"あのビルの上の灯り、映画のラストシーンみたいだね。"}},
+      {"npc":"itoa","line":"그러네. 저기서 크레딧 올라가도 어울리겠다.","emotion":"neutral","intensity":0.5,"gesture":"think","lines":{"en":"It does. Credits rolling up there would fit.","ja":"そうだね。あそこでエンドロールが流れても似合いそう。"}}
     ],
     [
-      {"npc":"kwonjun","line":"귤 향이 나는데, 어디 숨겼어?","emotion":"happy","intensity":0.6,"gesture":"shrug","lines":{"en":"I smell tangerines. Where did you hide them?","ja":"みかんの匂いがする。どこに隠したの？"}},
-      {"npc":"itoa","line":"숨기긴. 네 자리 앞에 제일 큰 거 놨어.","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"Hide them? I put the biggest one right in front of your seat.","ja":"隠してないよ。一番大きいのを君の席の前に置いたよ。"}}
+      {"npc":"kwonjun","line":"오늘 하루 어땠어?","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"How was your day?","ja":"今日はどうだった？"}},
+      {"npc":"itoa","line":"평범했어. 그래서 지금 이렇게 쉬는 게 더 좋네.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Ordinary. That's why resting like this feels even better.","ja":"普通だったよ。だから今こうして休むのがいい。"}}
     ],
     [
-      {"npc":"kwonjun","line":"오늘은 영화 예고편만 볼까?","emotion":"surprised","intensity":0.7,"gesture":"point","lines":{"en":"How about just watching trailers today?","ja":"今日は予告編だけ見ない？"}},
+      {"npc":"kwonjun","line":"오늘은 영화 예고편만 볼까?","emotion":"neutral","intensity":0.5,"gesture":"point","lines":{"en":"How about just watching trailers today?","ja":"今日は予告編だけ見ない？"}},
       {"npc":"itoa","line":"그러다 예고편만 5개 보겠네.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"We'll end up watching five trailers.","ja":"それ、予告編だけで5本見ることになるよ。"}},
       {"npc":"kwonjun","line":"좋지. 결말 고민은 5번 할 수 있잖아.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Great. I get to guess five endings.","ja":"いいじゃん。結末を5回も想像できる。"}}
     ],
     [
-      {"npc":"kwonjun","line":"창문에 비친 TV가 더 작아서 귀엽다.","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"The TV looks smaller and cuter in the window reflection.","ja":"窓に映ったテレビ、小さくてかわいいね。"}},
+      {"npc":"kwonjun","line":"창문에 비친 TV는 꽤 작아 보이네.","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"The TV looks pretty small in the window reflection.","ja":"窓に映ったテレビ、けっこう小さく見えるね。"}},
       {"npc":"itoa","line":"거기서 보면 자막은 아예 안 보이겠다.","emotion":"shy","intensity":0.5,"gesture":"nod","lines":{"en":"You couldn't read a single subtitle that way.","ja":"それじゃ字幕が全然読めなさそう。"}},
-      {"npc":"kwonjun","line":"그럼 네가 줄거리 만들어 줘.","emotion":"neutral","intensity":0.6,"gesture":"none","lines":{"en":"Then you can make up the plot for me.","ja":"じゃあ、あらすじを考えてよ。"}}
+      {"npc":"kwonjun","line":"그럼 줄거리는 네가 설명해 줘.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Then you can tell me the plot.","ja":"じゃあ、あらすじは君が説明してよ。"}}
     ],
     [
       {"npc":"kwonjun","line":"왼쪽이랑 오른쪽 중에 어느 야경이 더 좋아?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Which view do you like better, left or right?","ja":"左と右、どっちの夜景が好き？"}},
-      {"npc":"itoa","line":"왼쪽. 불빛들이 귤 상자처럼 모여 있어.","emotion":"happy","intensity":0.6,"gesture":"think","lines":{"en":"Left. The lights are all clustered like a box of tangerines.","ja":"左。灯りがみかん箱みたいにぎゅっと集まってる。"}}
+      {"npc":"itoa","line":"왼쪽. 불빛이 촘촘하게 모여 있어서 보기 좋아.","emotion":"happy","intensity":0.5,"gesture":"think","lines":{"en":"Left. The lights are packed close together, and it looks nice.","ja":"左。灯りがぎっしり集まっていてきれい。"}}
     ],
     [
-      {"npc":"kwonjun","line":"창가에 앉으면 영화 시작 전부터 분위기 난다.","emotion":"shy","intensity":0.6,"gesture":"shrug","lines":{"en":"Sitting by the window sets the mood before the movie even starts.","ja":"窓辺に座ると、映画が始まる前からいい雰囲気だね。"}},
-      {"npc":"itoa","line":"어떤 영화인데?","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"What movie are we watching?","ja":"何の映画？"}},
+      {"npc":"kwonjun","line":"창가에 앉으면 영화 시작 전부터 분위기 난다.","emotion":"shy","intensity":0.5,"gesture":"shrug","lines":{"en":"Sitting by the window sets the mood before the movie even starts.","ja":"窓辺に座ると、映画が始まる前からいい雰囲気だね。"}},
+      {"npc":"itoa","line":"어떤 영화인데?","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"What movie are we watching?","ja":"何の映画？"}},
       {"npc":"kwonjun","line":"아직 몰라. 일단 배경은 우리 거실이야.","emotion":"happy","intensity":0.4,"gesture":"point","lines":{"en":"No idea yet. It's set in our living room for now.","ja":"まだわかんない。とりあえず舞台はこのリビング。"}}
     ],
     [
-      {"npc":"kwonjun","line":"귤 까는 소리 들으니까 배고파졌어.","emotion":"happy","intensity":0.7,"gesture":"point","lines":{"en":"Hearing you peel a tangerine made me hungry.","ja":"みかんをむく音を聞いたらお腹がすいた。"}},
-      {"npc":"itoa","line":"하나 줄게. 네가 영화 고르면 한 쪽 더 줄게.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"I'll give you one. Pick a movie and you get an extra slice.","ja":"一つあげる。映画を選んでくれたらもうひと房ね。"}}
+      {"npc":"kwonjun","line":"요즘 듣는 노래 있어?","emotion":"happy","intensity":0.5,"gesture":"point","lines":{"en":"Listening to anything these days?","ja":"最近聴いてる曲ある？"}},
+      {"npc":"itoa","line":"밤에는 가사 없는 피아노 곡만 틀어 둬. 생각 정리하기 좋더라.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"At night I just play piano pieces without lyrics. Good for clearing my head.","ja":"夜は歌詞のないピアノ曲だけ流してる。考えをまとめるのにいいんだ。"}}
     ],
     [
       {"npc":"kwonjun","line":"소파에 앉으니까 리모컨까지 멀어 보인다.","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"The remote looks so far away once you sit down.","ja":"ソファに座ると、リモコンが遠く見えるね。"}},
-      {"npc":"itoa","line":"나도 그래. 우리 이번엔 일어나기 가위바위보 할까?","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"Same. Rock-paper-scissors to see who gets up?","ja":"私も。じゃんけんでどっちが立つか決める？"}}
+      {"npc":"itoa","line":"나도 일어나기 싫어. 그냥 다음 편 자동 재생 기다리자.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"I don't want to get up either. Let's just wait for autoplay.","ja":"私も立ちたくない。次の話の自動再生を待とう。"}}
     ],
     [
       {"npc":"kwonjun","line":"저 불빛 중에 하나만 고르면 뭐 고를래?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"If you could pick one of those lights, which one would it be?","ja":"あの灯りを一つだけ選ぶなら、どれにする？"}},
-      {"npc":"itoa","line":"저기 깜빡이는 거. 혼자 신호 보내는 것 같아.","emotion":"surprised","intensity":0.6,"gesture":"think","lines":{"en":"The blinking one. It looks like it's sending a signal.","ja":"あの点滅してるやつ。一人で合図してるみたい。"}},
-      {"npc":"kwonjun","line":"그럼 우리도 손 흔들어 줄까?","emotion":"happy","intensity":0.7,"gesture":"shrug","lines":{"en":"Should we wave back?","ja":"じゃあ、こっちも手を振ってみる？"}},
-      {"npc":"itoa","line":"응, 창문한테 들켜도 상관없어.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Sure. I don't mind if the window catches us.","ja":"うん。窓に見られても別にいいよ。"}}
+      {"npc":"itoa","line":"저기 깜빡이는 거. 자꾸 눈이 가네.","emotion":"neutral","intensity":0.5,"gesture":"think","lines":{"en":"The blinking one. My eyes keep going back to it.","ja":"あの点滅してるやつ。つい目がいく。"}},
+      {"npc":"kwonjun","line":"항공 장애등일걸. 높은 건물엔 다 있어.","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"Probably an aircraft warning light. Tall buildings all have them.","ja":"航空障害灯だと思う。高いビルにはみんなあるよ。"}},
+      {"npc":"itoa","line":"그렇구나. 알고 보니까 더 잘 보이네.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"I see. Now that I know, I notice it even more.","ja":"そうなんだ。知ったらもっと目につくね。"}}
     ],
     [
-      {"npc":"kwonjun","line":"진짜 조용한 영화 하나 보고 싶다.","emotion":"happy","intensity":0.6,"gesture":"shrug","lines":{"en":"I feel like watching a really quiet movie.","ja":"すごく静かな映画が見たいな。"}},
-      {"npc":"itoa","line":"그럼 귤 씹는 소리도 배경 음악처럼 들리겠다.","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"Then even chewing tangerines will sound like the soundtrack.","ja":"じゃあ、みかんを食べる音もBGMみたいに聞こえそう。"}}
+      {"npc":"kwonjun","line":"진짜 조용한 영화 하나 보고 싶다.","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"I feel like watching a really quiet movie.","ja":"すごく静かな映画が見たいな。"}},
+      {"npc":"itoa","line":"좋아. 소리 작게 틀어 놓고 보자.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Sure. Let's keep the volume low and watch.","ja":"いいね。音を小さくして見よう。"}}
     ],
     [
-      {"npc":"kwonjun","line":"커피 테이블이 영화관 매점이면 뭘 팔까?","emotion":"surprised","intensity":0.7,"gesture":"point","lines":{"en":"If our coffee table were a cinema snack stand, what would it sell?","ja":"このテーブルが映画館の売店だったら、何を売る？"}},
-      {"npc":"itoa","line":"귤이랑 귤 주스!","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Tangerines and tangerine juice!","ja":"みかんとみかんジュース！"}},
+      {"npc":"kwonjun","line":"커피 테이블 위가 좀 어수선하네.","emotion":"neutral","intensity":0.5,"gesture":"point","lines":{"en":"The coffee table's getting a bit messy.","ja":"コーヒーテーブルの上、ちょっと散らかってるね。"}},
+      {"npc":"itoa","line":"리모컨이랑 책만 남기고 치우자.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Let's clear it except for the remote and the books.","ja":"リモコンと本だけ残して片付けよう。"}},
       {"npc":"kwonjun","line":"다른 건?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Anything else?","ja":"ほかには？"}},
-      {"npc":"itoa","line":"그럼 네가 팝콘 담당 해.","emotion":"happy","intensity":0.6,"gesture":"nod","lines":{"en":"Then you're in charge of popcorn.","ja":"じゃあ、ポップコーンは君の担当ね。"}}
+      {"npc":"itoa","line":"나머지는 내일 정리해도 돼.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"The rest can wait until tomorrow.","ja":"残りは明日片付けてもいいよ。"}}
     ],
     [
       {"npc":"kwonjun","line":"오늘 야경은 배경 화면으로 써도 되겠어.","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"Tonight's skyline would make a good wallpaper.","ja":"今日の夜景、壁紙にできそうだね。"}},
@@ -62,15 +62,15 @@
     ],
     [
       {"npc":"kwonjun","line":"네 후드 색, 창가 불빛이랑 잘 어울려.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Your hoodie goes well with the lights by the window.","ja":"君のパーカーの色、窓辺の灯りによく合うね。"}},
-      {"npc":"itoa","line":"오, 그럼 여기서 내가 포스터 모델 할게.","emotion":"happy","intensity":0.6,"gesture":"think","lines":{"en":"Oh, I'll pose here for the poster then.","ja":"お、じゃあここでポスターのモデルやるよ。"}},
-      {"npc":"kwonjun","line":"잠깐만. 영화 제목부터 정해야지.","emotion":"happy","intensity":0.7,"gesture":"shrug","lines":{"en":"Wait. We need a movie title first.","ja":"ちょっと待って。先に映画のタイトルを決めようよ。"}}
+      {"npc":"itoa","line":"고마워. 오늘 이거 입길 잘했네.","emotion":"happy","intensity":0.5,"gesture":"think","lines":{"en":"Thanks. Glad I wore this today.","ja":"ありがとう。今日これを着てよかった。"}},
+      {"npc":"kwonjun","line":"사진 찍어 두면 괜찮겠다.","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"That'd make a nice photo.","ja":"写真に撮っておくといいかも。"}}
     ],
     [
-      {"npc":"kwonjun","line":"소파에서 볼 영화랑 창가에서 볼 영화가 따로 있는 것 같아.","emotion":"shy","intensity":0.6,"gesture":"shrug","lines":{"en":"Some movies are for the couch, and some are for the window seat.","ja":"ソファ向きの映画と窓辺向きの映画がある気がする。"}},
-      {"npc":"itoa","line":"창가에선 중간에 놓쳐도 아깝지 않은 걸로 하자.","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"By the window, let's pick one we won't mind missing parts of.","ja":"窓辺では、途中を見逃しても惜しくないやつにしよう。"}}
+      {"npc":"kwonjun","line":"소파에서 볼 영화랑 창가에서 볼 영화가 따로 있는 것 같아.","emotion":"shy","intensity":0.5,"gesture":"shrug","lines":{"en":"Some movies are for the couch, and some are for the window seat.","ja":"ソファ向きの映画と窓辺向きの映画がある気がする。"}},
+      {"npc":"itoa","line":"창가에선 중간에 놓쳐도 아깝지 않은 걸로 하자.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"By the window, let's pick one we won't mind missing parts of.","ja":"窓辺では、途中を見逃しても惜しくないやつにしよう。"}}
     ],
     [
-      {"npc":"kwonjun","line":"불 다 끄고 보면 창밖이 먼저 눈에 들어와.","emotion":"happy","intensity":0.7,"gesture":"point","lines":{"en":"With the lights off, the view outside catches your eye first.","ja":"明かりを全部消すと、まず窓の外が目に入るね。"}},
+      {"npc":"kwonjun","line":"불 다 끄고 보면 창밖이 먼저 눈에 들어와.","emotion":"happy","intensity":0.5,"gesture":"point","lines":{"en":"With the lights off, the view outside catches your eye first.","ja":"明かりを全部消すと、まず窓の外が目に入るね。"}},
       {"npc":"itoa","line":"맞아. TV가 켜지기 전엔 도시가 화면 같아.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Yeah. Until the TV comes on, the city is our screen.","ja":"うん。テレビをつけるまでは街がスクリーンみたい。"}}
     ],
     [
@@ -78,54 +78,54 @@
       {"npc":"itoa","line":"나도. 불빛 하나씩 보고 있으면 시간 금방 가.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"Me too. Looking at each little light makes time fly.","ja":"私も。灯りを一つずつ眺めてると時間があっという間。"}}
     ],
     [
-      {"npc":"kwonjun","line":"귤 한 알에 몇 쪽이 들었는지 세 봤어?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Have you ever counted the slices in a tangerine?","ja":"みかん一つに何房あるか数えたことある？"}},
-      {"npc":"itoa","line":"세다가 먹었어. 다음 귤도 아마 그럴걸.","emotion":"surprised","intensity":0.6,"gesture":"think","lines":{"en":"I ate it before I finished counting. I'll probably do it again.","ja":"数えてる途中で食べちゃった。次もたぶん同じだね。"}}
+      {"npc":"kwonjun","line":"요즘 잠은 잘 자?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Sleeping okay lately?","ja":"最近ちゃんと眠れてる？"}},
+      {"npc":"itoa","line":"늦게 자는 버릇이 안 고쳐져. 야경 보다 보면 시간이 금방 가.","emotion":"neutral","intensity":0.5,"gesture":"think","lines":{"en":"I still stay up late. Time flies when I watch the night view.","ja":"夜更かしの癖が直らない。夜景を見てると時間がすぐ過ぎるんだ。"}}
     ],
     [
-      {"npc":"kwonjun","line":"영화 주인공이 여기 오면 어디부터 앉을까?","emotion":"happy","intensity":0.6,"gesture":"shrug","lines":{"en":"Where would the main character sit if they came here?","ja":"映画の主人公がここに来たら、まずどこに座るかな？"}},
-      {"npc":"itoa","line":"소파. 2시간 뛰어다녔으면 쉬고 싶잖아.","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"The couch. After running for two hours, you'd want to rest.","ja":"ソファ。2時間も走り回ったら休みたいでしょ。"}},
+      {"npc":"kwonjun","line":"영화 주인공이 여기 오면 어디부터 앉을까?","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"Where would the main character sit if they came here?","ja":"映画の主人公がここに来たら、まずどこに座るかな？"}},
+      {"npc":"itoa","line":"소파. 2시간 뛰어다녔으면 쉬고 싶잖아.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"The couch. After running for two hours, you'd want to rest.","ja":"ソファ。2時間も走り回ったら休みたいでしょ。"}},
       {"npc":"kwonjun","line":"그래도 창가 자리는 보여 줘야지.","emotion":"shy","intensity":0.4,"gesture":"point","lines":{"en":"We should still show them the window seat.","ja":"それでも窓辺の席は見せなきゃ。"}}
     ],
     [
-      {"npc":"kwonjun","line":"오늘 영화는 첫 장면만 보고 골라 볼래?","emotion":"surprised","intensity":0.7,"gesture":"point","lines":{"en":"Want to pick tonight's movie by its opening scene?","ja":"今日は最初のシーンだけ見て映画を選ばない？"}},
-      {"npc":"itoa","line":"좋아. 첫 장면에 간식 나오면 바로 그걸로 하자.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Sure. If snacks appear in the first scene, that's the one.","ja":"いいね。最初におやつが出てきたらそれにしよう。"}}
+      {"npc":"kwonjun","line":"오늘 영화는 첫 장면만 보고 골라 볼래?","emotion":"neutral","intensity":0.5,"gesture":"point","lines":{"en":"Want to pick tonight's movie by its opening scene?","ja":"今日は最初のシーンだけ見て映画を選ばない？"}},
+      {"npc":"itoa","line":"좋아. 첫 장면이 조용하면 그걸로 하자.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Sure. If the first scene is quiet, that's the one.","ja":"いいよ。最初のシーンが静かならそれにしよう。"}}
     ],
     [
       {"npc":"kwonjun","line":"불빛이 하나 꺼졌네. 이제 자나 봐.","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"A light went out. Guess someone's going to sleep.","ja":"灯りが一つ消えたね。もう寝るのかな。"}},
       {"npc":"itoa","line":"우리도 영화 끝나면 좀 쉬자.","emotion":"shy","intensity":0.5,"gesture":"nod","lines":{"en":"Let's get some rest after the movie too.","ja":"私たちも映画が終わったら少し休もう。"}},
-      {"npc":"kwonjun","line":"응. 대신 다음 영화 후보 하나만 골라 두고.","emotion":"neutral","intensity":0.6,"gesture":"none","lines":{"en":"Yeah. Let's just pick one candidate for the next movie first.","ja":"うん。その前に次の映画の候補を一つだけ選ぼう。"}}
+      {"npc":"kwonjun","line":"응. 대신 다음 영화 후보 하나만 골라 두고.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Yeah. Let's just pick one candidate for the next movie first.","ja":"うん。その前に次の映画の候補を一つだけ選ぼう。"}}
     ],
     [
-      {"npc":"kwonjun","line":"너 귤 고를 때 크기부터 봐?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"When you pick a tangerine, do you check the size first?","ja":"みかんを選ぶとき、最初に大きさを見る？"}},
-      {"npc":"itoa","line":"아니, 먼저 향 맡아. 크기는 그다음이야.","emotion":"happy","intensity":0.6,"gesture":"think","lines":{"en":"No, I smell it first. Size comes second.","ja":"ううん。まず匂いをかぐ。大きさはその次。"}}
+      {"npc":"kwonjun","line":"산책은 요즘도 자주 나가?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Still going on walks a lot?","ja":"最近も散歩によく行く？"}},
+      {"npc":"itoa","line":"응, 저녁 먹고 한 바퀴씩. 밤공기가 괜찮더라.","emotion":"happy","intensity":0.5,"gesture":"think","lines":{"en":"Yeah, a lap after dinner. The night air is nice.","ja":"うん、夕飯のあとに一周ね。夜の空気がいいんだ。"}}
     ],
     [
-      {"npc":"kwonjun","line":"창밖이 조용해도 볼 건 많네.","emotion":"shy","intensity":0.6,"gesture":"shrug","lines":{"en":"It's quiet outside, but there's still plenty to see.","ja":"窓の外は静かだけど、見るものはいっぱいあるね。"}},
-      {"npc":"itoa","line":"저쪽 창들이 번갈아 밝아지는 거 찾아봐. 재밌어.","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"Watch those windows light up one by one. It's fun.","ja":"あっちの窓が順番に明るくなるの、見てみて。面白いよ。"}}
+      {"npc":"kwonjun","line":"창밖이 조용해도 볼 건 많네.","emotion":"shy","intensity":0.5,"gesture":"shrug","lines":{"en":"It's quiet outside, but there's still plenty to see.","ja":"窓の外は静かだけど、見るものはいっぱいあるね。"}},
+      {"npc":"itoa","line":"저쪽 창들이 번갈아 밝아지는 거 찾아봐. 재밌어.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Watch those windows light up one by one. It's fun.","ja":"あっちの窓が順番に明るくなるの、見てみて。面白いよ。"}}
     ],
     [
-      {"npc":"kwonjun","line":"여기 소파에 별명 하나 붙일까?","emotion":"happy","intensity":0.7,"gesture":"point","lines":{"en":"Should we give our couch a nickname?","ja":"このソファにあだ名をつけない？"}},
-      {"npc":"itoa","line":"자리 지킴이 어때? 한 번 앉으면 잘 안 일어나잖아.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Seat Keeper? Once you sit down, you never get up.","ja":"席の番人はどう？一度座ったらなかなか立たないし。"}},
-      {"npc":"kwonjun","line":"내 별명 같은데. 마음에 들어.","emotion":"surprised","intensity":0.5,"gesture":"none","lines":{"en":"That sounds like my nickname. I like it.","ja":"それ、僕のあだ名みたい。気に入った。"}}
+      {"npc":"kwonjun","line":"이 소파 꽤 오래 썼다.","emotion":"happy","intensity":0.5,"gesture":"point","lines":{"en":"We've had this couch for a while.","ja":"このソファ、けっこう長く使ってるね。"}},
+      {"npc":"itoa","line":"그래도 편해서 바꾸기 아까워.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"It's still comfy. Seems a waste to replace it.","ja":"でも楽だから替えるのはもったいない。"}},
+      {"npc":"kwonjun","line":"맞아. 한 번 앉으면 잘 안 일어나게 돼.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Right. Once you sit down, you don't get up.","ja":"だよね。一度座るとなかなか立てない。"}}
     ],
     [
       {"npc":"kwonjun","line":"영화 보기 전에 창밖 1분만 더 볼래.","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"One more minute at the window before the movie.","ja":"映画の前にあと1分だけ窓の外を見てたい。"}},
-      {"npc":"itoa","line":"좋아. 난 그동안 귤 한 알 까 둘게.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"Sure. I'll peel a tangerine while you look.","ja":"いいよ。その間にみかんを一つむいておくね。"}}
+      {"npc":"itoa","line":"좋아. 그동안 영화 틀 준비해 둘게.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"Sure. I'll get the movie ready meanwhile.","ja":"いいよ。その間に映画の準備をしておくね。"}}
     ],
     [
-      {"npc":"kwonjun","line":"테이블 위에 귤 하나만 있으니까 소품 같아.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"A lone tangerine on the table looks like a movie prop.","ja":"テーブルにみかんが一つだけあると、小道具みたい。"}},
-      {"npc":"itoa","line":"그럼 영화 시작 전에 사라지는 소품이네.","emotion":"surprised","intensity":0.6,"gesture":"think","lines":{"en":"A prop that disappears before the movie starts.","ja":"映画が始まる前に消える小道具だね。"}}
+      {"npc":"kwonjun","line":"거실 정리하니까 훨씬 넓어 보인다.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"The living room looks much bigger after tidying up.","ja":"リビングを片付けたら、ずっと広く見える。"}},
+      {"npc":"itoa","line":"물건 몇 개 치웠을 뿐인데 차이가 크네.","emotion":"neutral","intensity":0.5,"gesture":"think","lines":{"en":"We only moved a few things, but it makes a big difference.","ja":"少し片付けただけなのに、だいぶ違うね。"}}
     ],
     [
-      {"npc":"kwonjun","line":"저 멀리 불 켜진 층이 우리보다 높은가?","emotion":"happy","intensity":0.6,"gesture":"shrug","lines":{"en":"Is that lit floor way over there higher than ours?","ja":"遠くに見える明かりのついた階、ここより高いかな？"}},
-      {"npc":"itoa","line":"여기서 보면 다 비슷해. 불빛 세기부터 해 볼까?","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"They look about the same from here. Want to count the lights?","ja":"ここからだと同じくらいに見えるね。灯りを数えてみる？"}},
+      {"npc":"kwonjun","line":"저 멀리 불 켜진 층이 우리보다 높은가?","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"Is that lit floor way over there higher than ours?","ja":"遠くに見える明かりのついた階、ここより高いかな？"}},
+      {"npc":"itoa","line":"여기서 보면 다 비슷해. 불빛 세기부터 해 볼까?","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"They look about the same from here. Want to count the lights?","ja":"ここからだと同じくらいに見えるね。灯りを数えてみる？"}},
       {"npc":"kwonjun","line":"난 세다가 까먹을 것 같아.","emotion":"shy","intensity":0.4,"gesture":"point","lines":{"en":"I'd probably lose count halfway through.","ja":"途中でいくつか忘れそう。"}}
     ],
     [
-      {"npc":"kwonjun","line":"이 방이 영화에 나오면 처음에 뭘 보여 줄까?","emotion":"surprised","intensity":0.7,"gesture":"point","lines":{"en":"If this room were in a movie, what would they show first?","ja":"この部屋が映画に出たら、最初に何を映す？"}},
+      {"npc":"kwonjun","line":"이 방이 영화에 나오면 처음에 뭘 보여 줄까?","emotion":"neutral","intensity":0.5,"gesture":"point","lines":{"en":"If this room were in a movie, what would they show first?","ja":"この部屋が映画に出たら、最初に何を映す？"}},
       {"npc":"itoa","line":"창밖부터 보여 주고 소파로 천천히 돌려.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Start with the window, then slowly pan to the couch.","ja":"まず窓の外を映して、ゆっくりソファに向ける。"}},
-      {"npc":"kwonjun","line":"그리고 테이블엔 귤이 있겠지.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"And there'd be a tangerine on the table.","ja":"それでテーブルにはみかんがあるんだね。"}},
-      {"npc":"itoa","line":"당연하지. 소품 담당은 나야.","emotion":"happy","intensity":0.6,"gesture":"nod","lines":{"en":"Of course. I'm in charge of props.","ja":"もちろん。小道具は私の担当だよ。"}}
+      {"npc":"kwonjun","line":"그다음엔 TV 화면이겠지.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"And then the TV screen, I guess.","ja":"その次はテレビの画面かな。"}},
+      {"npc":"itoa","line":"응. 조용한 장면으로 시작하면 좋겠다.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"Yeah. Starting with a quiet scene would be nice.","ja":"うん。静かなシーンから始まるといいな。"}}
     ],
     [
       {"npc":"kwonjun","line":"조용한 밤에는 영화 후반부가 더 기억에 남아.","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"On quiet nights, the second half of a movie sticks with me more.","ja":"静かな夜は映画の後半が印象に残るな。"}},
@@ -133,50 +133,50 @@
     ],
     [
       {"npc":"kwonjun","line":"소파 끝에 앉으면 일어나기 쉽다며?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Didn't you say it's easier to get up from the edge of the couch?","ja":"ソファの端なら立ちやすいって言ってたよね？"}},
-      {"npc":"itoa","line":"그렇게 말하고 계속 앉아 있잖아.","emotion":"happy","intensity":0.6,"gesture":"think","lines":{"en":"You said that and you're still sitting there.","ja":"そう言って、ずっと座ったままじゃん。"}},
-      {"npc":"kwonjun","line":"오늘도 검증은 내일로 미룰래.","emotion":"happy","intensity":0.7,"gesture":"shrug","lines":{"en":"I'll put that theory to the test tomorrow. Again.","ja":"今日も検証は明日に持ち越そう。"}}
+      {"npc":"itoa","line":"그렇게 말하고 계속 앉아 있잖아.","emotion":"happy","intensity":0.5,"gesture":"think","lines":{"en":"You said that and you're still sitting there.","ja":"そう言って、ずっと座ったままじゃん。"}},
+      {"npc":"kwonjun","line":"오늘도 검증은 내일로 미룰래.","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"I'll put that theory to the test tomorrow. Again.","ja":"今日も検証は明日に持ち越そう。"}}
     ],
     [
-      {"npc":"kwonjun","line":"TV 끄니까 창문에 우리 모습이 보인다.","emotion":"shy","intensity":0.6,"gesture":"shrug","lines":{"en":"The TV's off. Now I can see us reflected in the window.","ja":"テレビを消したら、窓に僕たちが映ってる。"}},
-      {"npc":"itoa","line":"네 고양이 귀가 야경보다 먼저 보이는데?","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"I noticed your cat ears before the skyline.","ja":"夜景より先に君の猫耳が目に入ったけど？"}}
+      {"npc":"kwonjun","line":"TV 끄니까 창문에 우리 모습이 보인다.","emotion":"shy","intensity":0.5,"gesture":"shrug","lines":{"en":"The TV's off. Now I can see us reflected in the window.","ja":"テレビを消したら、窓に僕たちが映ってる。"}},
+      {"npc":"itoa","line":"야경보다 네 고양이 귀가 먼저 보이는데.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"I see your cat ears before the skyline.","ja":"夜景より先に君の猫耳が目に入るけど。"}}
     ],
     [
-      {"npc":"kwonjun","line":"저녁 영화 제목에 색 하나 넣으면 뭐가 좋을까?","emotion":"happy","intensity":0.7,"gesture":"point","lines":{"en":"What color would you put in the title of tonight's movie?","ja":"今夜の映画のタイトルに色を入れるなら何色？"}},
-      {"npc":"itoa","line":"주황! 뒤에 뭐가 붙어도 궁금해질 것 같아.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Orange! I'd be curious no matter what came after it.","ja":"オレンジ！後に何が続いても気になりそう。"}},
-      {"npc":"kwonjun","line":"주황 소파. 음, 좀 보고 싶네.","emotion":"surprised","intensity":0.5,"gesture":"none","lines":{"en":"Orange Couch. Hm, I'd watch that.","ja":"『オレンジのソファ』。うん、ちょっと見てみたい。"}}
+      {"npc":"kwonjun","line":"저녁 영화 제목에 색 하나 넣으면 뭐가 좋을까?","emotion":"happy","intensity":0.5,"gesture":"point","lines":{"en":"What color would you put in the title of tonight's movie?","ja":"今夜の映画のタイトルに色を入れるなら何色？"}},
+      {"npc":"itoa","line":"주황. 뒤에 뭐가 붙어도 궁금해질 것 같아.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Orange. I'd be curious no matter what came after it.","ja":"オレンジ。後に何が続いても気になりそう。"}},
+      {"npc":"kwonjun","line":"주황 소파. 음, 좀 보고 싶네.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Orange Couch. Hm, I'd watch that.","ja":"『オレンジのソファ』。うん、ちょっと見てみたい。"}}
     ],
     [
-      {"npc":"kwonjun","line":"귤 향이 영화 장르를 고른다면?","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"What genre would the smell of tangerines pick?","ja":"みかんの香りが映画のジャンルを選ぶなら？"}},
-      {"npc":"itoa","line":"모험이지. 껍질 열기 전엔 얼마나 달지 모르잖아.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"Adventure. You never know how sweet it is until you peel it.","ja":"冒険だね。むくまではどれくらい甘いかわかんないから。"}}
+      {"npc":"kwonjun","line":"요즘 본 영화 중에 괜찮은 거 있었어?","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"Seen anything good lately?","ja":"最近見た映画で良かったのある？"}},
+      {"npc":"itoa","line":"잔잔한 다큐 하나 봤어. 생각보다 오래 기억에 남더라.","emotion":"happy","intensity":0.5,"gesture":"nod","lines":{"en":"I watched a quiet documentary. It stayed with me longer than I expected.","ja":"静かなドキュメンタリーを見たよ。思ったより記憶に残ってる。"}}
     ],
     [
       {"npc":"kwonjun","line":"좋아하는 장면에서 매번 웃는 것도 재미있어.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"It's fun to laugh at your favorite scene every time.","ja":"好きなシーンで毎回笑うのも楽しいよね。"}},
-      {"npc":"itoa","line":"다음에 같이 보면 네가 웃기 직전에 나도 웃어 봐야지.","emotion":"surprised","intensity":0.6,"gesture":"think","lines":{"en":"Next time, I'll try laughing just before you do.","ja":"今度一緒に見るとき、君が笑う直前に笑ってみよう。"}}
+      {"npc":"itoa","line":"나도 그래. 같이 보면 그 장면을 기다리게 되더라.","emotion":"neutral","intensity":0.5,"gesture":"think","lines":{"en":"Same. When we watch together, I find myself waiting for that scene.","ja":"私も。一緒に見ると、その場面を待っちゃう。"}}
     ],
     [
-      {"npc":"kwonjun","line":"오늘은 소리 작게 하고 영화 볼래?","emotion":"happy","intensity":0.6,"gesture":"shrug","lines":{"en":"Want to keep the movie volume low today?","ja":"今日は音を小さくして映画を見ない？"}},
-      {"npc":"itoa","line":"응. 조용히 웃어도 옆에 있으면 다 들려.","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"Yeah. I'll hear you laugh even quietly if you're right here.","ja":"うん。隣にいたら、そっと笑っても聞こえるし。"}}
+      {"npc":"kwonjun","line":"오늘은 소리 작게 하고 영화 볼래?","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"Want to keep the movie volume low today?","ja":"今日は音を小さくして映画を見ない？"}},
+      {"npc":"itoa","line":"응. 조용히 웃어도 옆에 있으면 다 들려.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Yeah. I'll hear you laugh even quietly if you're right here.","ja":"うん。隣にいたら、そっと笑っても聞こえるし。"}}
     ],
     [
-      {"npc":"kwonjun","line":"창밖 불빛 중에 직접 그려 보고 싶은 거 있어?","emotion":"surprised","intensity":0.7,"gesture":"point","lines":{"en":"Any lights out there you'd like to draw yourself?","ja":"窓の外の灯りで、自分で描いてみたいやつはある？"}},
+      {"npc":"kwonjun","line":"창밖 불빛 중에 직접 그려 보고 싶은 거 있어?","emotion":"neutral","intensity":0.5,"gesture":"point","lines":{"en":"Any lights out there you'd like to draw yourself?","ja":"窓の外の灯りで、自分で描いてみたいやつはある？"}},
       {"npc":"itoa","line":"창가에서 보이는 3개. 점만 찍어도 알아보겠어.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Those three by the window. I'd know them even as dots.","ja":"窓から見えるあの3つ。点だけ描いてもわかるよ。"}}
     ],
     [
       {"npc":"kwonjun","line":"우리 영화 고르는 데 얼마나 걸렸지?","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"How long did it take us to pick a movie?","ja":"映画を選ぶのにどのくらいかかった？"}},
-      {"npc":"itoa","line":"귤 2개 먹을 만큼.","emotion":"shy","intensity":0.5,"gesture":"nod","lines":{"en":"Long enough to eat two tangerines.","ja":"みかんを2つ食べられるくらい。"}},
-      {"npc":"kwonjun","line":"그럼 영화 끝날 때까지 몇 개 더 필요해?","emotion":"neutral","intensity":0.6,"gesture":"none","lines":{"en":"So how many more will we need to finish the movie?","ja":"じゃあ、映画が終わるまでにあと何個いる？"}}
+      {"npc":"itoa","line":"한 30분? 고르다가 지칠 뻔했어.","emotion":"shy","intensity":0.5,"gesture":"nod","lines":{"en":"About 30 minutes? I almost got tired just choosing.","ja":"30分くらい？選ぶだけで疲れそうだった。"}},
+      {"npc":"kwonjun","line":"다음엔 목록을 미리 정해 두자.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Next time, let's make a list beforehand.","ja":"次はリストを先に決めておこう。"}}
     ],
     [
       {"npc":"kwonjun","line":"창가랑 소파 중에 하루 종일 있을 곳을 고르면?","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"If you had to spend all day by the window or on the couch?","ja":"窓辺とソファ、丸一日いるならどっち？"}},
-      {"npc":"itoa","line":"창가. 간식은 네가 소파에서 가져다줄 거지?","emotion":"happy","intensity":0.6,"gesture":"think","lines":{"en":"The window. You'll bring me snacks from the couch, right?","ja":"窓辺。ソファからおやつを運んでくれるよね？"}},
-      {"npc":"kwonjun","line":"소파를 고르면 배달은 없는데.","emotion":"happy","intensity":0.7,"gesture":"shrug","lines":{"en":"If I pick the couch, there's no delivery.","ja":"僕がソファを選んだら配達はないよ。"}}
+      {"npc":"itoa","line":"창가. 대신 담요는 네가 가져다줘.","emotion":"happy","intensity":0.5,"gesture":"think","lines":{"en":"The window. But you bring the blanket.","ja":"窓辺。その代わり毛布は持ってきてね。"}},
+      {"npc":"kwonjun","line":"소파를 고르면 배달은 없는데.","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"If I pick the couch, there's no delivery.","ja":"僕がソファを選んだら配達はないよ。"}}
     ],
     [
-      {"npc":"kwonjun","line":"제목은 재미없어 보여도 좋은 영화가 있더라.","emotion":"shy","intensity":0.6,"gesture":"shrug","lines":{"en":"Some great movies have boring titles.","ja":"タイトルはつまらなそうなのに、いい映画ってあるよね。"}},
-      {"npc":"itoa","line":"응. 평범해 보이는 귤도 까 보면 엄청 달 때 있어.","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"Sure. A plain-looking tangerine can turn out really sweet.","ja":"うん。普通のみかんでも、むいたらすごく甘いことあるし。"}}
+      {"npc":"kwonjun","line":"제목은 재미없어 보여도 좋은 영화가 있더라.","emotion":"shy","intensity":0.5,"gesture":"shrug","lines":{"en":"Some great movies have boring titles.","ja":"タイトルはつまらなそうなのに、いい映画ってあるよね。"}},
+      {"npc":"itoa","line":"응. 큰 기대 없이 봤다가 오래 남는 영화가 있더라.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Yeah. Some movies stay with you even when you expected nothing.","ja":"うん。期待せずに見たのに、ずっと残る映画ってあるよね。"}}
     ],
     [
-      {"npc":"kwonjun","line":"창가에서 보면 도시가 더 넓어 보여.","emotion":"happy","intensity":0.7,"gesture":"point","lines":{"en":"The city looks bigger from the window.","ja":"窓辺から見ると街が広く見える。"}},
+      {"npc":"kwonjun","line":"창가에서 보면 도시가 더 넓어 보여.","emotion":"happy","intensity":0.5,"gesture":"point","lines":{"en":"The city looks bigger from the window.","ja":"窓辺から見ると街が広く見える。"}},
       {"npc":"itoa","line":"그래서 어디까지 불빛이 이어지는지 자꾸 찾아보게 돼.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"That's why I keep looking for where the lights finally end.","ja":"だから灯りがどこまで続くのか、つい探しちゃう。"}}
     ],
     [
@@ -185,21 +185,21 @@
     ],
     [
       {"npc":"kwonjun","line":"좋은 영화 한 편 보고 나면 거실도 좀 다르게 보여.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"The room looks a little different after a good movie.","ja":"いい映画を一本見た後だと、リビングも少し違って見える。"}},
-      {"npc":"itoa","line":"맞아. 테이블 위 귤도 괜히 중요한 물건 같고.","emotion":"surprised","intensity":0.6,"gesture":"think","lines":{"en":"Yeah. Even that tangerine suddenly seems important.","ja":"うん。テーブルのみかんまで、なんだか大事なものに見える。"}}
+      {"npc":"itoa","line":"맞아. 평소 보던 물건도 좀 다르게 보이더라.","emotion":"neutral","intensity":0.5,"gesture":"think","lines":{"en":"Yeah. Even everyday things look a little different.","ja":"うん。いつもの物も少し違って見える。"}}
     ],
     [
-      {"npc":"kwonjun","line":"문 열고 들어올 때 TV보다 창문이 먼저 보여.","emotion":"happy","intensity":0.6,"gesture":"shrug","lines":{"en":"When I walk in, I notice the window before the TV.","ja":"ドアを開けるとテレビより先に窓が目に入る。"}},
-      {"npc":"itoa","line":"나는 소파부터 봐. 네가 누워 있을 것 같아서.","emotion":"neutral","intensity":0.7,"gesture":"none","lines":{"en":"I check the couch first. You're probably lying there.","ja":"私はソファが先。君が寝転がってそうだから。"}}
+      {"npc":"kwonjun","line":"문 열고 들어올 때 TV보다 창문이 먼저 보여.","emotion":"happy","intensity":0.5,"gesture":"shrug","lines":{"en":"When I walk in, I notice the window before the TV.","ja":"ドアを開けるとテレビより先に窓が目に入る。"}},
+      {"npc":"itoa","line":"나는 소파부터 봐. 네가 누워 있을 것 같아서.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"I check the couch first. You're probably lying there.","ja":"私はソファが先。君が寝転がってそうだから。"}}
     ],
     [
-      {"npc":"kwonjun","line":"불빛을 보고 기분을 색으로 말해 봐.","emotion":"surprised","intensity":0.7,"gesture":"point","lines":{"en":"Look at the lights. What color is your mood?","ja":"灯りを見て、今の気分を色で言ってみて。"}},
-      {"npc":"itoa","line":"창가 쪽은 파랑, 내 손에 있는 건 주황.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Blue by the window, orange for what's in my hand.","ja":"窓辺は青。手に持ってるこれはオレンジ。"}},
-      {"npc":"kwonjun","line":"내 기분은 소파 색이야. 오늘은 딱 거기까지만 움직일래.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Mine's couch-colored. That's as far as I'm moving today.","ja":"僕はソファ色。今日はそこまでしか動かないよ。"}}
+      {"npc":"kwonjun","line":"불빛을 보고 기분을 색으로 말해 봐.","emotion":"neutral","intensity":0.5,"gesture":"point","lines":{"en":"Look at the lights. What color is your mood?","ja":"灯りを見て、今の気分を色で言ってみて。"}},
+      {"npc":"itoa","line":"창가 쪽은 파랑. 지금 내 기분도 그쯤이야.","emotion":"happy","intensity":0.4,"gesture":"none","lines":{"en":"Blue by the window. My mood's about the same.","ja":"窓辺は青。今の気分もそのくらい。"}},
+      {"npc":"kwonjun","line":"난 소파 색이야. 오늘은 거기까지만 움직일래.","emotion":"happy","intensity":0.5,"gesture":"none","lines":{"en":"Mine's couch-colored. That's as far as I'm moving today.","ja":"僕はソファ色。今日はそこまでしか動かないよ。"}}
     ],
     [
       {"npc":"kwonjun","line":"영화 끝나면 뭐 할래?","emotion":"neutral","intensity":0.4,"gesture":"none","lines":{"en":"What do you want to do after the movie?","ja":"映画が終わったら何する？"}},
-      {"npc":"itoa","line":"남은 귤 나눠 먹고 다음에 볼 걸 적어 두자.","emotion":"shy","intensity":0.5,"gesture":"nod","lines":{"en":"Let's share the leftover tangerines and write down what to watch next.","ja":"残ったみかんを分けて、次に見る映画をメモしよう。"}},
-      {"npc":"kwonjun","line":"좋다. 고르는 시간도 영화의 일부라고 치자.","emotion":"neutral","intensity":0.6,"gesture":"none","lines":{"en":"Deal. Let's count picking the movie as part of the movie.","ja":"いいね。選ぶ時間も映画の一部ってことにしよう。"}}
+      {"npc":"itoa","line":"다음에 볼 걸 적어 두고 일찍 자자.","emotion":"shy","intensity":0.5,"gesture":"nod","lines":{"en":"Let's write down what to watch next and get some sleep.","ja":"次に見るものをメモして、早めに寝よう。"}},
+      {"npc":"kwonjun","line":"좋다. 고르는 시간도 영화의 일부라고 치자.","emotion":"neutral","intensity":0.5,"gesture":"none","lines":{"en":"Deal. Let's count picking the movie as part of the movie.","ja":"いいね。選ぶ時間も映画の一部ってことにしよう。"}}
     ]
   ]
 }

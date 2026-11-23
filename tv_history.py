@@ -19,7 +19,6 @@ TV_TOPIC = re.compile(
     r"(?:아까|방금|전에|그거|그것|봤던|봤던 거).*?(?:틀어|재생)|"
     r"다시\s*틀어|뭐\s*(?:틀었|틀어져|나오고)|"
     r"\b(?:tv|television|youtube|video|clip|rewatch)\b|テレビ|動画|ユーチューブ", re.I)
-KEY = re.compile(r"(?:[1-9]|10|h[0-9a-f]{8})\Z")
 
 
 def clean(value, limit):

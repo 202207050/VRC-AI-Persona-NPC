@@ -3,10 +3,10 @@
 Everything is a plain file so it can also be edited by hand:
     personas/<id>.md                 personality (PERSONA_FILE overrides kwonjun only)
     data/npcs/<id>/settings.json      switches from the settings page
-    data/npcs/<id>/impressions.json   one short note per player
+    data/npcs/<id>/impressions.json   per player: impression (one line), profile lines, pats/hugs/waves
     data/npcs/<id>/memory.json        long-term memory notes
-    data/npcs/<id>/history.json       recent conversation, when "keep history" is on
-    data/npcs/<id>/compaction.json    automatic memory tidy-up: last result and the last 3 backups (undo)
+    data/npcs/<id>/history.json       recent conversation, when "keep history" is on (the default)
+    data/npcs/<id>/compaction.json    memory call / tidy-up: last compaction result and the last 3 backups (undo)
     data/npcs/kwonjun/smalltalk_state.json  shared NPC small-talk settings and today's AI count
 Legacy data files are backed up and copied to kwonjun on first open.
 data/ is personal and is listed in .gitignore.
@@ -22,6 +22,7 @@ import tempfile
 import threading
 import time
 
+import action_contract as contract
 from voice_options import (DEFAULT_EFFORT, DEFAULT_MODEL, MODEL_RATES, clean_hints, effort_options, model_options,
                            validate_effort, validate_model)
 
@@ -30,6 +31,38 @@ DEFAULT_PERSONA = "persona.md"
 NPC_IDS = ("kwonjun", "itoa")
 DEFAULT_NPC_NAMES = {"kwonjun": "kwonjun", "itoa": "ITOAR"}
 LEGACY_NPC_NAMES = {"kwonjun": "권준", "itoa": "이토아"}
+# Lines of older default personas -> today's line (personas/*.md, persona.md). A saved persona line is swapped
+# only while it is still word for word an old default, so lines the user changed stay as they are.
+# t141 (TODO 141): calmer adult speech, no tangerine habit, fewer questions.
+_SPEECH = ("- 친근하고 편한 반말. 평범한 20대 어른처럼 담백하게 말한다. 감탄사와 느낌표는 아끼고, 말끝을 늘이지 않는다"
+           "(~ 쓰지 않음). 가끔 가벼운 농담은 하지만 손님을 놀리거나 아이 다루듯 하지 않는다.")
+_QUESTIONS = "- 상대 말에 관심을 보이고 편하게 받아 준다. 질문은 대화가 이어질 때 가끔만 한다."
+_NO_HABIT = " 먹을 것이나 장난감 같은 소재를 습관처럼 꺼내지 않는다."
+_KWONJUN_LIKES = "- 밤 풍경, 영화, 음악, 소파에서 쉬는 걸 좋아한다." + _NO_HABIT
+_OLD_SPEECH = {
+    "- 친근하고 편한 반말. 말끝을 귀엽게 늘이거나 아이 같은 말투를 쓰지 않는다. 장난기가 조금 있지만 상대를 놀리거나 무시하지는 않는다.": _SPEECH,
+    "- 친근한 반말. 장난기가 조금 있지만 상대를 놀리거나 무시하지는 않는다.": _SPEECH,
+    "- 호기심이 많아서 손님에게 이것저것 묻는 걸 좋아한다.": _QUESTIONS,
+}
+OLD_DEFAULT_LINES = {
+    "kwonjun": {
+        **_OLD_SPEECH,
+        # the 2026-11-20 rename (이토아 -> ITOAR) and t141 in one step
+        "- 함께 사는 이토아는 밝고 호기심이 많으며 귤을 좋아하는 친구다.": "- 함께 사는 ITOAR는 차분하고 다정한 친구다.",
+        "- 함께 사는 ITOAR는 밝고 호기심이 많으며 귤을 좋아하는 친구다.": "- 함께 사는 ITOAR는 차분하고 다정한 친구다.",
+        "- 밤 풍경, 영화, 음악, 소파에서 뒹굴며 쉬는 걸 좋아한다.": _KWONJUN_LIKES,
+        "- 밤 풍경, 영화, 소파에서 뒹굴기를 좋아한다.": _KWONJUN_LIKES,
+    },
+    "itoa": {
+        **_OLD_SPEECH,
+        "- 함께 사는 권준은 장난기가 있고 밤 풍경과 영화를 좋아하는 친구다.": "- 함께 사는 kwonjun은 차분하고 밤 풍경과 영화를 좋아하는 친구다.",
+        "- 함께 사는 kwonjun은 장난기가 있고 밤 풍경과 영화를 좋아하는 친구다.": "- 함께 사는 kwonjun은 차분하고 밤 풍경과 영화를 좋아하는 친구다.",
+        "- 밤의 도시가 내려다보이는 높은 층 거실에 사는 밝고 호기심 많은 20대 초반 여성. 후드 차림.":
+            "- 밤의 도시가 내려다보이는 높은 층 거실에 사는 20대 초반 여성. 후드 차림.",
+        "- 귤을 아주 좋아한다. 손님과 귤을 나누고 새로운 이야기를 듣는 걸 좋아한다.":
+            "- 조용한 음악을 틀어 두고 밤 풍경을 보거나 산책하는 걸 좋아한다." + _NO_HABIT,
+    },
+}
 DEFAULT_SMALLTALK = {"ai": True, "ratio": 0.2, "daily_cap": 30}
 SMALLTALK_STATE = "smalltalk_state.json"
 
@@ -39,26 +72,43 @@ def npc_id(value=None):
     return value if isinstance(value, str) and value in NPC_IDS else "kwonjun"
 
 
-# "[W04AI] AFFECTION type=<pat|hug|wave> npc=<id> by=<name>" -> a phrase added to that player's impression
+# "[W04AI] AFFECTION type=<pat|hug|wave> npc=<id> by=<name>" -> recorded once per kind for that player, in
+# "touch_recorded" NEXT TO the impression (t20): the memory call rewrites the impression and must neither
+# erase these facts nor be overwritten by them. The AI and the settings page see the phrases.
 AFFECTION_PHRASES = {"pat": "내 머리를 쓰다듬어 준 적이 있음.", "hug": "나를 안아 준 적이 있음.",
                      "wave": "나에게 손을 흔들어 인사해 준 적이 있음."}
-AFFECTION_INTERVAL_S = 600        # at most one note per player per type in this long
-TOUCH_AFFECTION = ("pat", "hug")  # each is recorded at most once per saved impression
 
 DEFAULT_SPEAKER = "플레이어"     # used until the VRChat log tells us the local player's name
 
 MAX_HISTORY = 10                  # remembered exchanges (user + NPC = one exchange)
 MAX_PERSONA_CHARS = 6000          # the persona is sent with every reply: keep it affordable
 MAX_IMPRESSION_CHARS = 500        # hand-written impressions; long ones are condensed by compaction
-AI_IMPRESSION_CHARS = 150         # what the AI itself may write in a reply (keeps replies short and cheap)
+AI_IMPRESSION_CHARS = 60          # what the memory call writes: one line (the world panel shows 60)
+PROFILE_LINES = 4                 # facts about one player the memory call keeps (name to call, likes, ...)
+PROFILE_CHARS = 60
 MAX_NOTE_CHARS = 80
 MAX_NOTES = 60                    # hard cap; compaction normally runs before it (default: more than 50)
 MAX_PLAYERS = 50
 MAX_NAME_CHARS = 40
 
+# The memory call (t20, like AI chat apps): after a reply went out, one cheap call reads the last turns
+# with that person and updates their profile, the impression and the memos. The reply call itself no
+# longer writes any of it.
+MEMORY_TURNS = 6                  # exchanges with that person the call reads (the newest last)
+MEMORY_NEW_NOTES = 2              # new memos one call may add
+MEMORY_MIN_GAP_S = 10.0           # one person's calls start at least this far apart ("기억해 줘": at once)
+_REMEMBER = re.compile(r"기억\s*해|잊지\s*(?:마|말아)|외워\s*(?:줘|둬)|remember", re.IGNORECASE)
+
+
+def asks_to_remember(text) -> bool:
+    """"이거 기억해 줘": the memory call runs right away, without the 10 s gap (a question like "나 기억해?"
+    also matches; that only skips the gap)."""
+    return bool(_REMEMBER.search(str(text or "")))
+
+
 DEFAULT_SETTINGS = {
-    "keep_history": False,        # False = today's behaviour: the conversation is forgotten on restart
-    "auto_update": True,          # the AI may rewrite impressions / add memory notes by itself
+    "keep_history": True,         # the recent conversation survives a restart (t20; off = forgotten)
+    "auto_update": True,          # "대화 뒤 기억 정리": the memory call may rewrite impressions / profiles, add memos
     "brain_model": DEFAULT_MODEL,
     "brain_effort": DEFAULT_EFFORT,   # output_config.effort of the normal reply (voice_options.EFFORTS)
     "auto_recall": True,              # the AI may ask for a second, slower look through all its memos
@@ -111,6 +161,20 @@ _NAME_RE = re.compile(r"^[ \t]*[-*]?[ \t]*이름[ \t]*[:：][ \t]*(.+?)[ \t]*$",
 def _one_line(text, limit: int) -> str:
     text = " ".join(str(text or "").split())
     return text[:limit]
+
+
+def _new_player() -> dict:
+    return {"note": "", "locked": False, "updated": "", "talks": 0, "profile": []}
+
+
+def _profile(lines) -> list:
+    """Profile lines as stored: strings only, one line each, no "없음" markers or repeats, at most 4 x 60."""
+    out = []
+    for line in lines if isinstance(lines, list) else ():
+        line = _one_line(line, PROFILE_CHARS) if isinstance(line, str) else ""
+        if line and not contract.is_none_marker(line) and line not in out:
+            out.append(line)
+    return out[:PROFILE_LINES]
 
 
 def _stamp() -> str:
@@ -194,8 +258,12 @@ class Store:
                     pass
         self._compacting = False              # a compaction call is running (in memory only)
         self.pose = "stand"                   # stand | sit | lie, from the world's NPC_POSE log (in memory only)
-        self._affection_at = {}               # (player, type) -> time of the last note (in memory only)
-        self.players = {}                     # name -> {"note", "locked", "updated", "talks"}
+        self._memory_busy = {}                # player -> "" running / "again" / "force": one more run queued
+        self._memory_last = {}                # player -> time.monotonic() of the last memory call start
+        self.memory_changes = 0               # memory calls that changed something since the app started
+        self.memory_changed_at = ""           # _stamp() of the last such change (in memory only)
+        # name -> {"note", "locked", "updated", "talks", "profile", "before"?, "talked"?, "touch_recorded"?}
+        self.players = {}
         for name, p in (self._load("impressions.json", {}).get("players") or {}).items():
             if isinstance(p, dict):
                 self.players[_one_line(name, MAX_NAME_CHARS)] = self._clean_player(p)
@@ -314,11 +382,22 @@ class Store:
         except (TypeError, ValueError):
             talks = 0
         note = _one_line(p.get("note"), MAX_IMPRESSION_CHARS)
-        recorded = p.get("touch_recorded")
-        touch = [kind for kind in TOUCH_AFFECTION if AFFECTION_PHRASES[kind] in note
-                 or (isinstance(recorded, list) and kind in recorded)]
-        player = {"note": note, "locked": bool(p.get("locked")),
-                  "updated": _one_line(p.get("updated"), 20), "talks": talks}
+        recorded = p.get("touch_recorded") if isinstance(p.get("touch_recorded"), list) else []
+        touch = []
+        for kind, phrase in AFFECTION_PHRASES.items():
+            if phrase in note:                # before t20 the phrase was written into the impression itself
+                note = note.replace(phrase, " ")
+                touch.append(kind)
+            elif kind in recorded:
+                touch.append(kind)
+        player = {"note": _one_line(note, MAX_IMPRESSION_CHARS), "locked": bool(p.get("locked")),
+                  "updated": _one_line(p.get("updated"), 20), "talks": talks, "profile": _profile(p.get("profile"))}
+        before = _one_line(p.get("before"), MAX_IMPRESSION_CHARS)
+        if before:
+            player["before"] = before           # the impression before the memory call's last rewrite
+        talked = _one_line(p.get("talked"), 20)
+        if talked:
+            player["talked"] = talked           # _stamp() of the last exchange with this player
         if touch:
             player["touch_recorded"] = touch
         return player
@@ -366,12 +445,8 @@ class Store:
         if m and _one_line(m.group(1), MAX_NAME_CHARS) == legacy:
             text = text[:m.start(1)] + default + text[m.end(1):]
         text = re.sub(rf"(?m)^# {legacy}(?= 성격 설정(?: \(예시\))?$)", f"# {default}", text)
-        if self.npc == "kwonjun":
-            text = re.sub(r"(?m)^- 함께 사는 이토아는(?= 밝고 호기심이 많으며 귤을 좋아하는 친구다\.$)",
-                          "- 함께 사는 ITOAR는", text)
-        elif self.npc == "itoa":
-            text = re.sub(r"(?m)^- 함께 사는 권준은(?= 장난기가 있고 밤 풍경과 영화를 좋아하는 친구다\.$)",
-                          "- 함께 사는 kwonjun은", text)
+        for old, new in OLD_DEFAULT_LINES.get(self.npc, {}).items():
+            text = re.sub(rf"(?m)^{re.escape(old)}(?=\r?$)", lambda _: new, text)
         return text
 
     def _migrate_persona_names(self):
@@ -485,7 +560,7 @@ class Store:
 
     def impression(self, name: str) -> dict:
         with self.lock:
-            return dict(self.players.get(name) or {"note": "", "locked": False, "updated": "", "talks": 0})
+            return dict(self.players.get(name) or _new_player())
 
     def player_label(self, name: str) -> str:
         return f"{name}(나)" if self.speaker_known and name == self.speaker else name
@@ -506,51 +581,34 @@ class Store:
                                    f"[NPC 대화 시작: 상대 NPC {name}]"},
                                   json.dumps({"lines": {"ko": said}}, ensure_ascii=False))
 
-    def after_reply(self, name: str, user_text: str, assistant_json: str, impression: str = "", memory_note: str = "", utterance=None) -> dict:
-        """Called by the AI after a good reply: store the exchange and merge what it wants to remember."""
-        changed = {}
+    def after_reply(self, name: str, user_text: str, assistant_json: str, utterance=None) -> None:
+        """Called by the AI after a reply: store the exchange and count it for that player. What to remember
+        about it is the memory call's job (memory_begin / memory_finish), after the reply went out."""
         with self.lock:
             user = {"role": "user", "content": user_text}
             if utterance is not None:
                 user["utterance"] = dict(utterance)
             self._append_exchange(user, assistant_json)
-            p = self.players.get(name) or {"note": "", "locked": False, "updated": "", "talks": 0}
+            p = self.players.get(name) or _new_player()
             p["talks"] += 1
-            impression = _one_line(impression, AI_IMPRESSION_CHARS)
-            if self.settings["auto_update"] and impression and not p["locked"] and impression != p["note"]:
-                p["note"], p["updated"] = impression, _stamp()
-                changed["impression"] = impression
+            p["talked"] = _stamp()
             self.players[name] = p
             while len(self.players) > MAX_PLAYERS:       # forget whoever has the oldest unlocked note
                 free = [k for k in self.players if k != name and not self.players[k]["locked"]]
                 if not free:                             # everyone else is locked: the newcomer is not kept
                     del self.players[name]
-                    changed.pop("impression", None)
                     break
                 del self.players[min(free, key=lambda k: self.players[k]["updated"])]
             self._save_players()
-            note = _one_line(memory_note, MAX_NOTE_CHARS)
-            if self.settings["auto_update"] and note and all(n["text"] != note for n in self.notes):
-                # full: the oldest note the AI wrote itself makes room; notes the user wrote are never dropped
-                ai_notes = [n for n in self.notes if n["by"] == "ai"]
-                while len(self.notes) >= MAX_NOTES and ai_notes:
-                    self.notes.remove(ai_notes.pop(0))
-                if len(self.notes) < MAX_NOTES:
-                    self.notes.append({"text": note, "by": "ai", "at": _stamp()})
-                    self._save_notes()
-                    changed["memory_note"] = note
-        return changed
 
-    def add_affection(self, name: str, kind: str, now: float = None) -> str:
-        """The world logged that `name` patted / hugged / waved at this NPC: add a short phrase to this
-        NPC's impression of that player. Returns the phrase when it was written, else ''.
-        Like the AI's own notes it needs "auto_update" on and the player's impression unlocked.
-        Touch is recorded once per type even if the impression is later summarized."""
+    def add_affection(self, name: str, kind: str) -> str:
+        """The world logged that `name` patted / hugged / waved at this NPC: record it once per kind for that
+        player, next to the impression (never inside it). Returns the phrase when it was recorded, else ''.
+        Like the memory call it needs "auto_update" on and the player unlocked."""
         phrase = AFFECTION_PHRASES.get(kind)
         name = _one_line(name, MAX_NAME_CHARS)
         if not phrase or not name:
             return ""
-        now = time.time() if now is None else now
         with self.lock:
             if not self.settings["auto_update"]:
                 return ""
@@ -558,22 +616,11 @@ class Store:
             if p is None:
                 if len(self.players) >= MAX_PLAYERS:      # never push out someone's impression for this
                     return ""
-                p = {"note": "", "locked": False, "updated": "", "talks": 0}
-            if p["locked"]:
-                return ""
+                p = _new_player()
             recorded = p.get("touch_recorded", [])
-            if kind in recorded:
+            if p["locked"] or kind in recorded:
                 return ""
-            last = self._affection_at.get((name, kind))
-            if last is not None and 0 <= now - last < AFFECTION_INTERVAL_S:
-                return ""
-            self._affection_at[(name, kind)] = now
-            note = (p["note"] + " " + phrase).strip()
-            if phrase in p["note"] or len(note) > MAX_IMPRESSION_CHARS:
-                return ""
-            p["note"], p["updated"] = note, _stamp()
-            if kind in TOUCH_AFFECTION:
-                p["touch_recorded"] = [*recorded, kind]
+            p["touch_recorded"], p["updated"] = [*recorded, kind], _stamp()
             self.players[name] = p
             self._save_players()
             return phrase
@@ -605,7 +652,7 @@ class Store:
             return [n for i, n in enumerate(notes) if i in chosen]
 
     def prompt_tail(self, speaker: str, heard: str = None) -> str:
-        """Memory + impression block appended to the system prompt (small: capped notes, one player).
+        """Memory + profile + impression block appended to the system prompt (small: capped notes, one player).
         heard given = only the memos picked for that utterance (pick_notes); None = all of them."""
         with self.lock:
             p = self.impression(speaker)
@@ -623,6 +670,11 @@ class Store:
             lines.append(f"- 이름: {label}" if self.speaker_known or speaker != DEFAULT_SPEAKER else "- 이름은 아직 모른다.")
             if p["talks"]:
                 lines.append(f"- 지금까지 {p['talks']}번 말을 주고받았다.")
+            if p["profile"]:
+                lines.append("- 이 사람에 대해 아는 것: " + " / ".join(p["profile"]))
+            touched = [AFFECTION_PHRASES[kind] for kind in p.get("touch_recorded", ())]
+            if touched:
+                lines.append("- 이 사람과 있었던 일: " + " ".join(touched))
             lines.append(f"- 이 사람에 대한 내 인상: {p['note']}" if p["note"]
                          else "- 이 사람에 대한 인상은 아직 없다.")
             return "\n".join(lines) + "\n"
@@ -659,8 +711,11 @@ class Store:
                 "notes": [dict(n) for n in self.notes],
                 "compaction": self.compaction_state(),
                 "history": talks,
+                "memory": {"changes": self.memory_changes, "changed_at": self.memory_changed_at},
+                "affection": dict(AFFECTION_PHRASES),
                 "limits": {"persona": MAX_PERSONA_CHARS, "impression": MAX_IMPRESSION_CHARS, "note": MAX_NOTE_CHARS,
-                           "notes": MAX_NOTES, "history": MAX_HISTORY, "name": MAX_NAME_CHARS},
+                           "notes": MAX_NOTES, "history": MAX_HISTORY, "name": MAX_NAME_CHARS,
+                           "profile": PROFILE_LINES},
             }
 
     def apply(self, req: dict) -> None:
@@ -715,8 +770,8 @@ class Store:
                     if not name or not isinstance(p, dict):
                         continue
                     old = self.players.get(name, {})
-                    clean = self._clean_player(dict(p, talks=old.get("talks", 0), updated=old.get("updated", ""),
-                                                    touch_recorded=old.get("touch_recorded", [])))
+                    # the page edits the impression and the lock; the rest stays what the app keeps
+                    clean = self._clean_player(dict(old, note=p.get("note"), locked=p.get("locked")))
                     if clean["note"] != old.get("note", ""):
                         clean["updated"] = _stamp()
                     new[name] = clean
@@ -756,16 +811,143 @@ class Store:
         if smalltalk_patch is not None:
             self.set_smalltalk_settings(smalltalk_patch)
 
-    # ------------------------------------------------------------ memory compaction
-    # Like context compaction: when the memos grow past a threshold, ONE cheap model call merges and
-    # condenses them. The caller (persona_npc_app.start_compaction) runs it on its own thread AFTER a
-    # reply went out:   job = compaction_begin()  ->  model call, no lock held  ->  compaction_finish().
+    # ------------------------------------------------------------ memory call and memory compaction
+    # Two cheap model calls that run on their own thread AFTER a reply went out (persona_npc_app.start_memory),
+    # in the same frame:   job = *_begin()  ->  model call, no lock held  ->  *_finish() checks the answer and
+    # stores it, never over what was edited meanwhile, with an undo backup in compaction.json.
+    #   memory call (t20): the last turns with one player -> that player's profile and impression, new memos.
+    #   compaction: when the memos grow past a threshold, merges and condenses them (like context compaction).
 
     def _compact_data(self) -> dict:
         data = self._load(COMPACT_FILE, {})
         if not isinstance(data.get("backups"), list):
             data["backups"] = []
         return data
+
+    @staticmethod
+    def _usage(summary: dict, usage) -> None:
+        if usage:
+            inp, out = MODEL_RATES[DEFAULT_MODEL][:2]
+            summary["usage"] = {"in": int(usage.get("in", 0)), "out": int(usage.get("out", 0))}
+            summary["cost_usd"] = round((summary["usage"]["in"] * inp + summary["usage"]["out"] * out) / 1e6, 6)
+
+    def _keep_backup(self, data: dict, entry: dict) -> None:
+        data["backups"] = (data["backups"] + [entry])[-COMPACT_BACKUPS:]
+
+    def _add_ai_note(self, text: str) -> bool:
+        """Full: the oldest memo the AI wrote makes room; memos the user wrote are never dropped."""
+        ai_notes = [n for n in self.notes if n["by"] == "ai"]
+        while len(self.notes) >= MAX_NOTES and ai_notes:
+            self.notes.remove(ai_notes.pop(0))
+        if len(self.notes) >= MAX_NOTES:
+            return False
+        self.notes.append({"text": text, "by": "ai", "at": _stamp()})
+        return True
+
+    def memory_wait(self, name: str, force: bool = False, now: float = None) -> float:
+        """Seconds until that player's next memory call may start (MEMORY_MIN_GAP_S; 0 when forced)."""
+        now = time.monotonic() if now is None else now
+        last = self._memory_last.get(name)
+        return 0.0 if force or last is None else max(0.0, last + MEMORY_MIN_GAP_S - now)
+
+    def memory_claim(self, name: str, force: bool = False, now: float = None):
+        """-> seconds to wait before that player's memory call, or None when the caller starts nothing:
+        "auto_update" is off, or a call for that player is running -- then ONE more run is queued for it, so
+        the newest turn is never left out (memory_release hands it over)."""
+        with self.lock:
+            if not self.settings["auto_update"] or not name:
+                return None
+            if name in self._memory_busy:
+                self._memory_busy[name] = "force" if force or self._memory_busy[name] == "force" else "again"
+                return None
+            self._memory_busy[name] = ""
+            return self.memory_wait(name, force, now)
+
+    def memory_release(self, name: str, now: float = None):
+        """After a run: seconds to wait before the queued run (the claim is kept), or None (claim dropped)."""
+        with self.lock:
+            again = self._memory_busy.get(name, "")
+            if not again or not self.settings["auto_update"]:
+                self._memory_busy.pop(name, None)
+                return None
+            self._memory_busy[name] = ""
+            return self.memory_wait(name, again == "force", now)
+
+    def memory_begin(self, name: str, now: float = None):
+        """The memory call's input for one player, or None when there is no exchange with them to read.
+        Only turns whose utterance names that speaker are used (an overheard line or NPC small talk is not)."""
+        with self.lock:
+            turns = []
+            for i in range(0, len(self.history) - 1, 2):
+                user, npc = self.history[i], self.history[i + 1]
+                if (user.get("utterance") or {}).get("speaker") != name:
+                    continue
+                said = npc["content"]
+                try:
+                    said = json.loads(said)["lines"]["ko"]
+                except (ValueError, KeyError, TypeError):
+                    pass
+                turns.append({"them": _one_line(user["content"], 300), "me": _one_line(said, 300)})
+            if not turns:
+                return None
+            self._memory_last[name] = time.monotonic() if now is None else now   # the gap counts real calls only
+            p = self.impression(name)
+            return {"npc": self.npc_name(), "name": name, "label": self.player_label(name), "talks": p["talks"],
+                    "turns": turns[-MEMORY_TURNS:], "profile": list(p["profile"]), "impression": p["note"],
+                    "notes": [n["text"] for n in self.notes]}
+
+    def memory_finish(self, job: dict, result=None, usage=None, error: str = "") -> dict:
+        """Check and store what the memory call returned -> summary {"at", "ok", "error", "name",
+        "impression": {"before", "after"} | None, "profile": [lines] | None, "notes": [new memos], "usage",
+        "cost_usd"}. Never over a hand edit made while the call ran; a locked player keeps impression and
+        profile (memos may still be written); "auto_update" switched off meanwhile = nothing is stored."""
+        with self.lock:
+            name = job["name"]
+            done = {"at": _stamp(), "ok": False, "error": error, "name": name, "impression": None,
+                    "profile": None, "notes": [], "usage": None, "cost_usd": 0.0}
+            self._usage(done, usage)
+            if error or not isinstance(result, dict):
+                done["error"] = error or "bad result"
+                return done
+            done["ok"] = True
+            if result.get("changed") is not True or not self.settings["auto_update"]:
+                return done
+            entry = {"at": done["at"], "kind": "memory", "notes": None, "after": None, "players": {}, "profiles": {}}
+            p = self.players.get(name)
+            if p is not None and not p["locked"]:
+                new = result.get("impression")
+                new = _one_line(new, AI_IMPRESSION_CHARS) if isinstance(new, str) else ""
+                if new and not contract.is_none_marker(new) and p["note"] == job["impression"] and new != p["note"]:
+                    done["impression"] = entry["players"][name] = {"before": p["note"], "after": new}
+                    p["before"], p["note"] = p["note"], new
+                lines = _profile(result.get("profile"))   # an empty answer never wipes the profile
+                if lines and p["profile"] == job["profile"] and lines != p["profile"]:
+                    entry["profiles"][name] = {"before": p["profile"], "after": lines}
+                    done["profile"], p["profile"] = lines, lines
+                if done["impression"] or done["profile"]:
+                    p["updated"] = done["at"]
+            old_notes = [dict(n) for n in self.notes]
+            new_notes = result.get("notes") if isinstance(result.get("notes"), list) else []
+            for text in new_notes[:MEMORY_NEW_NOTES]:
+                text = _one_line(text, MAX_NOTE_CHARS) if isinstance(text, str) else ""
+                if not text or contract.is_none_marker(text) or any(n["text"] == text for n in self.notes):
+                    continue
+                if not self._add_ai_note(text):
+                    break
+                done["notes"].append(text)
+            if not (done["impression"] or done["profile"] or done["notes"]):
+                return done
+            if done["notes"]:
+                entry["notes"], entry["after"] = old_notes, self._notes_sig(self.notes)
+                self._save_notes()
+            if done["impression"] or done["profile"]:
+                self._save_players()
+            data = self._compact_data()
+            self._keep_backup(data, entry)
+            self._save(COMPACT_FILE, data)
+            self.memory_changes += 1
+            self.memory_changed_at = done["at"]
+            return done
 
     @staticmethod
     def _notes_sig(notes) -> list:
@@ -824,10 +1006,7 @@ class Store:
             before = job["before"]
             last = {"at": _stamp(), "ok": False, "error": error, "notes_before": before, "notes_after": before,
                     "impressions": [], "usage": None, "cost_usd": 0.0}
-            if usage:
-                inp, out = MODEL_RATES[DEFAULT_MODEL][:2]
-                last["usage"] = {"in": int(usage.get("in", 0)), "out": int(usage.get("out", 0))}
-                last["cost_usd"] = round((last["usage"]["in"] * inp + last["usage"]["out"] * out) / 1e6, 6)
+            self._usage(last, usage)
             if error or not isinstance(result, dict):
                 last["error"] = error or "bad result"
                 data["last"] = last
@@ -865,10 +1044,10 @@ class Store:
                 people[name] = {"before": old, "after": new}
 
             if notes_changed or people:
-                data["backups"] = (data["backups"] + [{
+                self._keep_backup(data, {
                     "at": last["at"], "notes": old_notes if notes_changed else None,
                     "after": self._notes_sig(self.notes) if notes_changed else None, "players": people,
-                }])[-COMPACT_BACKUPS:]
+                })
                 if notes_changed:
                     self._save_notes()
                 if people:
@@ -884,9 +1063,10 @@ class Store:
             return last
 
     def compaction_undo(self) -> str:
-        """Put back what the newest backup holds ("되돌리기"). '' when done, else the Korean reason.
-        Memos written after that compaction stay; an impression edited since then is left alone.
-        Automatic compaction is switched off, or the next reply would condense the same memos again."""
+        """Put back what the newest backup holds ("되돌리기"): a compaction or a memory call. '' when done,
+        else the Korean reason. Memos written after it stay; an impression or profile edited since is left
+        alone. Undoing a compaction switches automatic compaction off, or the next reply would condense the
+        same memos again."""
         with self.lock:
             if self._compacting:
                 return "지금 정리하는 중입니다. 잠시 뒤에 다시 눌러 주세요."
@@ -913,12 +1093,19 @@ class Store:
                 p = self.players.get(name)
                 if p and isinstance(v, dict) and p["note"] == v.get("after"):
                     p["note"], p["updated"], changed = _one_line(v.get("before"), MAX_IMPRESSION_CHARS), _stamp(), True
+            for name, v in (b.get("profiles") or {}).items():
+                p = self.players.get(name)
+                if p and isinstance(v, dict) and p["profile"] == _profile(v.get("after")):
+                    p["profile"], p["updated"], changed = _profile(v.get("before")), _stamp(), True
             if changed:
                 self._save_players()
             data["last_sig"] = self._notes_sig(self.notes)
-            if isinstance(data.get("last"), dict):
+            memory_call = b.get("kind") == "memory"
+            if isinstance(data.get("last"), dict) and not memory_call:
                 data["last"]["undone"] = _stamp()
             self._save(COMPACT_FILE, data)
+            if memory_call:
+                return ""
             self.settings = dict(self.settings, compact_on=False)
             persisted = dict(self.settings)
             if not self.model_configured:
@@ -978,7 +1165,7 @@ class Store:
         if p is None:
             if len(self.players) >= MAX_PLAYERS:
                 return None, f"플레이어가 {MAX_PLAYERS}명이라 더 적을 수 없습니다."
-            p = {"note": "", "locked": False, "updated": "", "talks": 0}
+            p = _new_player()
         return name, p
 
     def set_impression(self, name, text) -> str:
@@ -986,10 +1173,10 @@ class Store:
             name, p = self._player_for_edit(name)
             if name is None:
                 return p
-            note = _one_line(text, MAX_IMPRESSION_CHARS)
-            if note != p["note"]:
-                p["note"], p["updated"] = note, _stamp()
-            self.players[name] = p
+            clean = self._clean_player(dict(p, note=text))      # a typed pat/hug phrase goes next to it
+            if clean["note"] != p["note"]:
+                clean["updated"] = _stamp()
+            self.players[name] = clean
             self._save_players()
         return ""
 

@@ -53,8 +53,10 @@ class R6VoiceTests(unittest.TestCase):
         for spoken, mode in (("켜", "lq"), ("꺼줘", "off"), ("LQ", "lq"), ("HQ로", "hq"), ("컷아웃", "cutout")):
             self.assertEqual(local_commands.world_command("거울 " + spoken), {"do": "mirror", "action": mode})
         for heard, expected in (
-            ("전원한테 거울 켜줘", {"do": "mirror", "action": "lq", "scope": "all"}),
-            ("모두 거울 꺼줘", {"do": "mirror", "action": "off", "scope": "all"}),
+            ("전원한테 거울 켜줘", {"do": "mirror", "action": "lq", "who": "all"}),
+            ("모두 거울 꺼줘", {"do": "mirror", "action": "off", "who": "all"}),
+            ("여기 있는 사람들 거울 켜 줘", {"do": "mirror", "action": "lq", "who": "all"}),
+            ("내 거울 HQ로", {"do": "mirror", "action": "hq"}),
             ("나한테 거울 켜줘", {"do": "mirror", "action": "lq"}),
             ("야간 모드 30%로 해줘", {"do": "night_mode", "action": "30"}),
             ("다 같이 밤 모드 30%로 해줘", {"do": "night_mode", "action": "30", "scope": "all"}),
@@ -212,8 +214,8 @@ class R6VoiceTests(unittest.TestCase):
                     tr.text = "전원한테 거울 켜줘"
                     append(PTT)
                     reply = replies.get_for_world(2)
-                    self.assertEqual(reply["steps"], [{"do": "mirror", "action": "lq"}])
-                    self.assertEqual(reply["line"], "거울은 각자 화면에서만 바뀌어서 네 거울만 바꿨어.")
+                    self.assertEqual(reply["steps"], [{"do": "mirror", "action": "lq", "who": "all"}])
+                    self.assertEqual(reply["line"], "알겠어.")
                 finally:
                     stop.set()
                     worker.join(3)

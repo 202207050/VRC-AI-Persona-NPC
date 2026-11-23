@@ -121,9 +121,9 @@ def main():
         fake.answers.append(answer("안녕!"))
         r = brain.reply("안녕")
         ok(len(fake.requests) == 1 and "recall" not in r, "small talk: one call")
-        ok(list(props(fake.requests[0]))[:2] == ["search", "recall"] and props(fake.requests[0])["recall"] == {"type": "boolean"},
+        ok(list(props(fake.requests[0]))[:2] == ["search", "recall"] and props(fake.requests[0])["recall"]["type"] == "boolean",
            "schema offers search and recall first")
-        ok("recall" not in fake.requests[0]["output_config"]["format"]["schema"]["required"], "recall is optional")
+        ok("recall" in fake.requests[0]["output_config"]["format"]["schema"]["required"], "recall is required (false when unused, t18)")
         ok("recall(기억 되짚기)" in fake.requests[0]["system"][0]["text"], "the recall rule sits in the cached fixed block")
 
         # ---- a recall turn: interim line, then one careful call with every memo
@@ -134,8 +134,9 @@ def main():
         store.apply({"notes": notes})
         fake.requests.clear()
         interim = []
-        fake.answers += [answer("음… 잠깐 생각해 볼게.", recall=True, impression="미리 쓴 인상"),
-                         answer("저번에 토요일에 같이 영화 보자고 했잖아!", memory_note="Alice가 약속을 확인함")]
+        fake.answers += [answer("음… 잠깐 생각해 볼게.", recall=True),
+                         answer("저번에 토요일에 같이 영화 보자고 했잖아!")]
+        notes_before = [dict(n) for n in store.notes]
         r = brain.reply("저번에 내가 뭐 하자고 했었지?", on_interim=interim.append)
         ok(len(fake.requests) == 2 and r["line"] == "저번에 토요일에 같이 영화 보자고 했잖아!" and "error" not in r,
            "recall turn: two calls, the second answer is the reply")
@@ -153,8 +154,9 @@ def main():
         ok(one["system"][0] == two["system"][0], "the cached fixed block is identical in both calls")
         ok(store.history[-2]["content"] == "저번에 내가 뭐 하자고 했었지?" and len(store.history) == 4,
            "history keeps only the player's own words, one exchange")
-        ok(store.notes[-1]["text"] == "Alice가 약속을 확인함" and store.players["Alice"]["note"] != "미리 쓴 인상",
-           "memory updates come from the final answer only")
+        ok([{k: n[k] for k in ("text", "by")} for n in store.notes] == [{k: n[k] for k in ("text", "by")} for n in notes_before]
+           and "memory_note" not in props(two) and "impression" not in props(two),
+           "t20: the reply calls write no memo or impression (the memory call does, after the reply)")
 
         # ---- the NPC's own higher effort wins over the recall level
         store.apply({"settings": {"brain_effort": "max"}})

@@ -24,6 +24,7 @@ import re
 import threading
 import time
 
+import activity
 import persona_store
 
 WINDOW_S = 20.0            # /cfg answers this long after CFG_OPEN
@@ -40,6 +41,68 @@ CFG_RE = re.compile(_STAMP + r"\[W04AI\] (CFG_OPEN|CFG_SET)\b(.*)$", re.DOTALL)
 # ("[Behaviour] Joining or Creating Room: <name>" is a different line and does not match)
 JOIN_RE = re.compile(_STAMP + r"\[Behaviour\] Joining (local:[0-9A-Za-z]+|wrld_[0-9A-Fa-f\-]+)")
 LEAVE_RE = re.compile(_STAMP + r"(\[Behaviour\] OnLeftRoom\b|VRCApplication: HandleApplicationQuit\b)")
+
+
+# /cfg "memory" (t20; Tools/contract/memory_v1.json): what the memory call changed, for the panel and, as
+# the "digest" string, for the world's Global sync (every player sees the host app's NPC memory).
+MEMORY_PEOPLE = 8          # players, the latest conversation first
+MEMORY_NOTES = 8           # memos, the newest first
+MEMORY_PERSONA_LINES = 3   # persona summary
+CARD_CHARS = 60            # one impression / persona line / joined profile in the panel and the digest
+DIGEST_MAX_BYTES = 3000    # UTF-8; one synced string per NPC
+DIGEST_HEAD = "W04MEM 1"
+
+
+def _cut(text, limit: int = CARD_CHARS) -> str:
+    text = " ".join(str(text or "").split())      # also no tab or line break: the digest splits on them
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+def persona_summary(text: str) -> list:
+    """The persona's first 3 lines of content (no heading, no "이름:" line), at most 60 characters each."""
+    lines = []
+    for raw in str(text or "").splitlines():
+        line = raw.strip().lstrip("-*").strip()
+        if not line or raw.lstrip().startswith("#") or persona_store._NAME_RE.match(raw):
+            continue
+        lines.append(_cut(line))
+        if len(lines) == MEMORY_PERSONA_LINES:
+            break
+    return lines
+
+
+def memory_view(st) -> dict:
+    """The /cfg "memory" block of one NPC store (the caller holds st.lock)."""
+    known = [(name, p) for name, p in st.players.items()
+             if p["talks"] or p["note"] or p["profile"] or p.get("touch_recorded")]
+    known.sort(key=lambda item: (item[1].get("talked", ""), item[1]["updated"]), reverse=True)
+    # the raw VRChat display name (no "(나)"): the world matches it to the viewer (D-2: own row in full)
+    people = [{"name": name, "note": _cut(p["note"]), "profile": list(p["profile"]),
+               "talks": p["talks"], "changed_at": p["updated"], "before": _cut(p.get("before", "")),
+               "touch": list(p.get("touch_recorded", ()))} for name, p in known[:MEMORY_PEOPLE]]
+    notes = [{"text": n["text"], "by": n["by"], "changed_at": n["at"]} for n in st.notes[::-1][:MEMORY_NOTES]]
+    changed_at = st.memory_changed_at or max([p["updated"] for p in st.players.values()]
+                                            + [n["at"] for n in st.notes] + [""])
+    view = {"v": 1, "persona": persona_summary(st.persona_text()), "people": people, "notes": notes,
+            "changed_at": changed_at, "changes": st.memory_changes}
+    view["digest"] = digest(view)
+    return view
+
+
+def digest(view: dict) -> str:
+    """One string per NPC for the world's Global sync (contract memory_v1.json "digest"): tab-separated
+    lines, nothing but names, one-line impressions, joined profiles and memos; at most 3000 UTF-8 bytes
+    (the oldest memos, then the last players, then persona lines give way)."""
+    head = [DIGEST_HEAD, f"T\t{_cut(view.get('changed_at'), 20)}\t{int(view.get('changes') or 0)}"]
+    persona = [f"P\t{_cut(line)}" for line in view.get("persona", ())]
+    people = [f"U\t{_cut(p['name'], persona_store.MAX_NAME_CHARS)}\t{_cut(p['note'])}\t{_cut(' · '.join(p['profile']))}"
+              for p in view.get("people", ())]
+    notes = [f"N\t{_cut(n['text'], persona_store.MAX_NOTE_CHARS)}" for n in view.get("notes", ())]
+    while True:
+        text = "\n".join(head + persona + people + notes)
+        if len(text.encode("utf-8")) <= DIGEST_MAX_BYTES:
+            return text
+        (notes or people or persona).pop()
 
 
 def parse_world_ids(text: str) -> set:
@@ -278,7 +341,7 @@ class CfgBridge:
                 err = str(e) if isinstance(e, ValueError) else "잡담 설정을 저장하지 못했습니다."
         elif op in ("auto", "keep_history", "recall", "compact"):
             on = _flag(req.get("on"))
-            key, label = {"auto": ("auto_update", "스스로 고쳐 쓰기"), "keep_history": ("keep_history", "최근 대화 이어가기"),
+            key, label = {"auto": ("auto_update", "대화 뒤 기억 정리"), "keep_history": ("keep_history", "최근 대화 이어가기"),
                           "recall": ("auto_recall", "필요할 때 깊이 떠올리기"),
                           "compact": ("compact_on", "기억 자동 정리")}[op]
             st.apply({"settings": {key: on}})
@@ -286,7 +349,8 @@ class CfgBridge:
             what = label + (" 켬" if on else " 끔")
             detail += f"\ton={int(on)}"
         elif op == "compact_undo":
-            err, what = st.compaction_undo(), "기억 정리를 되돌림 (자동 정리는 꺼 둠)"
+            # the newest backup: a compaction (then automatic compaction is switched off) or a memory call
+            err, what = st.compaction_undo(), "가장 최근 기억 정리를 되돌림"
         elif op == "dictate":
             target = req.get("target")
             if target == "none":
@@ -381,9 +445,16 @@ class CfgBridge:
                 "auto": bool(st.settings["auto_update"]), "keep_history": bool(st.settings["keep_history"]),
                 "smalltalk": smalltalk,
                 "players": players, "notes": [n["text"] for n in st.notes],
+                # t20: the memory call's results, newest first, and the Global sync string (memory_v1.json)
+                "memory": memory_view(st),
                 "history": history[-HISTORY_ITEMS:],
                 "dictate": {"target": d["target"], "player": d["player"]} if d else None,
                 "msg": self.msg,
+                # the activity record's last 20 rows (activity.Journal), for the panel's "불러오기"
+                "act": activity.journal.recent(st.npc),
+                # TODO 140: the newest 10 warn/error codes of the whole app, [{"c", "t", "n"}] newest first
+                # (the developer measurement panel reads it; the table is Tools/contract/errors.json)
+                "errors": activity.recent_errors.snapshot(),
             }
 
         def pack() -> bytes:
@@ -393,10 +464,18 @@ class CfgBridge:
             if self._shared["model_panel"]:
                 body.update(st.brain_options(), brain_access=self.brain_access(st.speaker if st.speaker_known else ""))
             body["rev"] = 2 ** 31                               # widest value while measuring
+            rows = body["act"]["rows"]
+            while len(pack()) > MAX_CFG_BYTES and rows:
+                rows.pop(0)                                     # the activity record gives way first
+            while len(pack()) > MAX_CFG_BYTES and body["errors"]:
+                body["errors"].pop()                            # then the oldest error codes
             while len(pack()) > MAX_CFG_BYTES and body["history"]:
                 body["history"].pop(0)                          # oldest talk first
             while len(pack()) > MAX_CFG_BYTES and len(body["players"]) > 1:
                 body["players"].pop()
+            memory = body["memory"]
+            while len(pack()) > MAX_CFG_BYTES and (memory["notes"] or len(memory["people"]) > 1):
+                (memory["notes"] or memory["people"]).pop()     # the digest (<= 3000 bytes) stays whole
             while len(pack()) > MAX_CFG_BYTES and body["persona"]:
                 over = len(pack()) - MAX_CFG_BYTES              # bytes; a Korean letter is 3
                 body["persona"] = body["persona"][:-max(1, over // 3)]
